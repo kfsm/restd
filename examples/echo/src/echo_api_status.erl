@@ -1,4 +1,4 @@
--module(echo_api_user_agent).
+-module(echo_api_status).
 
 -export([
 	resource/0,
@@ -10,7 +10,7 @@
 
 %%
 resource() ->
-	{'user-agent'}.
+	{status, '_'}.
 
 %%
 allowed_methods() ->
@@ -25,10 +25,8 @@ content_accepted() ->
    [].
 
 %%
-'GET'(_, _, Heads) ->
-	{_, UA} = lists:keyfind('User-Agent', 1, Heads),
-	{ok, 
-		jsx:encode([
-			{'user-agent', UA}
-		])
-	}.
+'GET'(_, Uri, _Heads) ->
+	[_, Code] = uri:get(segments, Uri),
+	list_to_integer(
+		binary_to_list(Code)
+	).

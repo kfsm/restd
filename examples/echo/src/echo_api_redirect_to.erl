@@ -1,4 +1,4 @@
--module(echo_api_user_agent).
+-module(echo_api_redirect_to).
 
 -export([
 	resource/0,
@@ -10,7 +10,7 @@
 
 %%
 resource() ->
-	{'user-agent'}.
+	{'redirect-to'}.
 
 %%
 allowed_methods() ->
@@ -25,10 +25,6 @@ content_accepted() ->
    [].
 
 %%
-'GET'(_, _, Heads) ->
-	{_, UA} = lists:keyfind('User-Agent', 1, Heads),
-	{ok, 
-		jsx:encode([
-			{'user-agent', UA}
-		])
-	}.
+'GET'(_, Url, _Heads) ->
+	{302, [{'Location', uri:q(url, Url)}], <<>>}.
+

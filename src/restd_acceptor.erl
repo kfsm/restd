@@ -9,29 +9,40 @@
 	init/1,
 	free/2,
 	'LISTEN'/3,
-	'ACCEPT'/3
+	'ACCEPT'/3,
+	'HANDLE'/3
 ]).
 
 %% default state
 -record(fsm, {
-	uid
+	uid,
+	resource,
+	request,
+	content,
+	q
 }).
 
-%%
-%%
+%%%------------------------------------------------------------------
+%%%
+%%% Factory
+%%%
+%%%------------------------------------------------------------------   
+
+%% start acceptor process
 start_link(Uid, Uri) ->
 	kfsm_pipe:start_link(?MODULE, [Uid, Uri]).
 
+%% start listener process
 start_link(Uid, Uri, Pool) ->
 	%% TODO: registered service (pipe library)
 	kfsm_pipe:start_link(?MODULE, [Uid, Uri, Pool]).
-
 
 init([Uid, Uri]) ->
 	{ok, _} = knet:bind(Uri),
 	{ok, 'ACCEPT', 
 		#fsm{
-			uid = Uid
+			uid = Uid,
+			q   = deq:new()
 		}
 	};
 
@@ -45,6 +56,21 @@ init([Uid, Uri, Pool]) ->
 
 free(Reason, _) ->
 	ok.
+
+%%%------------------------------------------------------------------
+%%%
+%%% LISTEN
+%%%
+%%%------------------------------------------------------------------   
+
+'LISTEN'(_, _, S) ->
+	{next_state, 'LISTEN', S}.
+
+%%%------------------------------------------------------------------
+%%%
+%%% ACCEPT
+%%%
+%%%------------------------------------------------------------------   
 
 %%
 %%
@@ -61,11 +87,31 @@ free(Reason, _) ->
 'ACCEPT'(_, _, S) ->
 	{next_state, 'ACCEPT', S}.
 
-%%
-%%
-'LISTEN'(_, _, S) ->
-	{next_state, 'LISTEN', S}.
+%%%------------------------------------------------------------------
+%%%
+%%% HANDLE
+%%%
+%%%------------------------------------------------------------------   
 
+'HANDLE'({http, _Uri, Msg}, _Pipe, S)
+ when is_binary(Msg) ->
+   {next_state, 'HANDLE', 
+   	S#fsm{
+   		q = deq:enq(Msg, S#fsm.q)
+   	}
+   }; 
+
+'HANDLE'({http, Uri, eof}, Pipe, #fsm{resource=Mod, content=Type}=S) ->
+   try
+   	{http, Uri, {Mthd, Heads}} = S#fsm.request,
+   	Msg  = erlang:iolist_to_binary(deq:list(S#fsm.q)),
+		Http = handle_response(Mod:Mthd(Type, Uri, Heads, Msg), Type),
+		_    = pipe:a(Pipe, Http),
+      {next_state, 'ACCEPT', S#fsm{q = deq:new()}}
+   catch _:Reason ->
+      io:format("--> ~p~n~p~n", [Uri, Reason]),
+		{next_state, 'ACCEPT', S}
+   end.
 
 %%
 %%
@@ -74,7 +120,22 @@ handle_request(Mod, {http, Uri, {Mthd,  Heads}}, Pipe, S)
  	Type = assert_content_type(opts:val('Accept', [{'*', '*'}], Heads), Mod:content_provided()),
  	Http = handle_response(Mod:Mthd(Type, Uri, Heads), Type),
  	_    = pipe:a(Pipe, Http),
-   {next_state, 'ACCEPT', S}.
+   {next_state, 'ACCEPT', S};
+
+handle_request(Mod, {http, Uri, {Mthd,  Heads}}=Req, Pipe, S)
+ when Mthd =:= 'PUT' orelse Mthd =:= 'POST' orelse Mthd =:= 'PATCH' ->
+ 	Type = assert_content_type([opts:val('Content-Type', Heads)], Mod:content_accepted()),
+   {next_state, 
+      'HANDLE',
+      S#fsm{
+         resource = Mod,
+         request  = Req,
+         content  = Type
+      }
+   };
+
+handle_request(_Mod, {http, _, {_, _}}, _Pipe, _S) ->
+   throw({error, not_implemented}).
 
 %%
 %%
@@ -86,12 +147,12 @@ handle_response({Code, Heads, Msg}, Type) ->
       _     -> {Code, [{'Content-Length', size(Msg)} | Heads], Msg}
    end; 	
 handle_response(Code, Type) ->
-   {Code, [], <<>>}.
+   {Code, [{'Content-Type', Type}, {'Content-Length', 0}], <<>>}.
 
 %%
 %% 
 lookup_resource(Uid, Uri) ->
-	case lookup_resource2(Uri, pns:lookup({restd, Uid}, '_')) of
+	case lookup_resource_list(Uri, pns:lookup({restd, Uid}, '_')) of
 		%% not_available error
 		[] -> 
 			throw({error, not_available});
@@ -99,7 +160,7 @@ lookup_resource(Uid, Uri) ->
 			Mod
 	end.
 
-lookup_resource2(Uri, List) ->
+lookup_resource_list(Uri, List) ->
 	Req = uri:get(segments, Uri),
 	lists:sort(
 		fun({A, _}, {B, _}) -> size(A) =< size(B) end, 

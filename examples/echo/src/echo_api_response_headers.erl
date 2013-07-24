@@ -1,4 +1,4 @@
--module(echo_api_user_agent).
+-module(echo_api_response_headers).
 
 -export([
 	resource/0,
@@ -10,7 +10,7 @@
 
 %%
 resource() ->
-	{'user-agent'}.
+	{'response-headers'}.
 
 %%
 allowed_methods() ->
@@ -25,10 +25,10 @@ content_accepted() ->
    [].
 
 %%
-'GET'(_, _, Heads) ->
-	{_, UA} = lists:keyfind('User-Agent', 1, Heads),
-	{ok, 
+'GET'(_, Uri, _) ->
+	H = uri:q(Uri),
+	{ok, H, 
 		jsx:encode([
-			{'user-agent', UA}
+			{headers, H} 
 		])
 	}.
