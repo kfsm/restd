@@ -1,0 +1,20 @@
+{application, restd,
+   [
+      {description, "rest api daemon"},
+      {vsn,         "0.0.0"},
+      {modules,     [
+         restd,
+         restd_sup,
+         restd_app
+      ]},
+      {registered,  []},
+      {applications,[
+         kernel, 
+         stdlib,
+         knet
+      ]},
+      {mod, {restd_app, []}},
+      {env, []}
+   ]
+}.  
+

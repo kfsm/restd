@@ -1,0 +1,19 @@
+{application, echo,
+   [
+      {description, "restd example echo service (aka httpbin)"},
+      {vsn,         "0.0.0"},
+      {modules,     [
+         echo,
+         echo_sup,
+         echo_app
+      ]},
+      {registered,  []},
+      {applications,[
+         kernel, 
+         stdlib,
+         restd
+      ]},
+      {mod, {echo_app, []}},
+      {env, []}
+   ]
+}.  
