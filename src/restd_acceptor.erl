@@ -54,7 +54,7 @@ init([Uid, Uri, Pool]) ->
 		}
 	}.
 
-free(Reason, _) ->
+free(_Reason, _S) ->
 	ok.
 
 %%%------------------------------------------------------------------
@@ -80,7 +80,7 @@ free(Reason, _) ->
 		ok  = assert_method(Mthd, Mod:allowed_methods()),
 		handle_request(Mod, Req, Pipe, S)
 	catch _:Reason ->
-		io:format("--> ~p~n~p~n", [Uri, Reason]),
+		pipe:a(Pipe, handle_failure(Reason)),
 		{next_state, 'ACCEPT', S}
 	end;
 
@@ -109,7 +109,7 @@ free(Reason, _) ->
 		_    = pipe:a(Pipe, Http),
       {next_state, 'ACCEPT', S#fsm{q = deq:new()}}
    catch _:Reason ->
-      io:format("--> ~p~n~p~n", [Uri, Reason]),
+   	pipe:a(Pipe, handle_failure(Reason)),
 		{next_state, 'ACCEPT', S}
    end.
 
@@ -122,7 +122,7 @@ handle_request(Mod, {http, Uri, {Mthd,  Heads}}, Pipe, S)
  	_    = pipe:a(Pipe, Http),
    {next_state, 'ACCEPT', S};
 
-handle_request(Mod, {http, Uri, {Mthd,  Heads}}=Req, Pipe, S)
+handle_request(Mod, {http, _Uri, {Mthd,  Heads}}=Req, _Pipe, S)
  when Mthd =:= 'PUT' orelse Mthd =:= 'POST' orelse Mthd =:= 'PATCH' ->
  	Type = assert_content_type([opts:val('Content-Type', Heads)], Mod:content_accepted()),
    {next_state, 
@@ -150,6 +150,22 @@ handle_response(Code, Type) ->
    {Code, [{'Content-Type', Type}, {'Content-Length', 0}], <<>>}.
 
 %%
+%% failure on HTTP request
+handle_failure({badmatch, {error, Reason}}) ->
+   {Reason, [{'Content-Type', {text, plain}}, {'Content-Length', 0}], <<>>};
+handle_failure({error, Reason}) -> 
+   {Reason, [{'Content-Type', {text, plain}}, {'Content-Length', 0}], <<>>};
+handle_failure(badarg) ->
+   {badarg, [{'Content-Type', {text, plain}}, {'Content-Length', 0}], <<>>};
+handle_failure({badarg, _}) ->
+   {badarg, [{'Content-Type', {text, plain}}, {'Content-Length', 0}], <<>>};
+handle_failure(Reason) ->
+   lager:error("restd failed: ~p ~p", [Reason, erlang:get_stacktrace()]),
+   {500,    [{'Content-Type', {text, plain}}, {'Content-Length', 0}], <<>>}.
+
+
+
+%%
 %% 
 lookup_resource(Uid, Uri) ->
 	case lookup_resource_list(Uri, pns:lookup({restd, Uid}, '_')) of
@@ -172,7 +188,7 @@ lookup_resource_list(Uri, List) ->
 	
 %%
 %% assert method
-assert_method(Method, ['*']) ->
+assert_method(_Method, ['*']) ->
    ok;
 assert_method(Method, Allowed) ->
    case lists:member(Method, Allowed) of
@@ -182,7 +198,7 @@ assert_method(Method, Allowed) ->
 
 %%
 %% assert content type
-assert_content_type([], B) ->
+assert_content_type([], _B) ->
 	throw({error, not_acceptable});
 assert_content_type([H | T], B) ->
 	case assert_content_type(H, B) of
