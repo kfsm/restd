@@ -30,12 +30,12 @@
 
 %% start acceptor process
 start_link(Uid, Uri) ->
-	kfsm_pipe:start_link(?MODULE, [Uid, Uri]).
+	pipe:start_link(?MODULE, [Uid, Uri], []).
 
 %% start listener process
 start_link(Uid, Uri, Pool) ->
 	%% TODO: registered service (pipe library)
-	kfsm_pipe:start_link(?MODULE, [Uid, Uri, Pool]).
+	pipe:start_link(?MODULE, [Uid, Uri, Pool], []).
 
 init([Uid, Uri]) ->
 	{ok, _} = knet:bind(Uri),
@@ -74,7 +74,7 @@ free(_Reason, _S) ->
 
 %%
 %%
-'ACCEPT'({http, Uri, {Mthd, _}}=Req, Pipe, S) ->
+'ACCEPT'({http, Uri, {Mthd, _Head, _Env}}=Req, Pipe, S) ->
 	try
 		Mod = lookup_resource(S#fsm.uid, Uri),
 		ok  = assert_method(Mthd, Mod:allowed_methods()),
@@ -103,9 +103,9 @@ free(_Reason, _S) ->
 
 'HANDLE'({http, Uri, eof}, Pipe, #fsm{resource=Mod, content=Type}=S) ->
    try
-   	{http, Uri, {Mthd, Heads}} = S#fsm.request,
+   	{http, Uri, {Mthd, Heads, Env}} = S#fsm.request,
    	Msg  = erlang:iolist_to_binary(deq:list(S#fsm.q)),
-		Http = handle_response(Mod:Mthd(Type, Uri, Heads, Msg), Type),
+		Http = handle_response(Mod:Mthd(Type, Uri, Heads, Env, Msg), Type),
 		_    = pipe:a(Pipe, Http),
       {next_state, 'ACCEPT', S#fsm{q = deq:new()}}
    catch _:Reason ->
@@ -115,14 +115,14 @@ free(_Reason, _S) ->
 
 %%
 %%
-handle_request(Mod, {http, Uri, {Mthd,  Heads}}, Pipe, S)
+handle_request(Mod, {http, Uri, {Mthd,  Heads, Env}}, Pipe, S)
  when Mthd =:= 'GET' orelse Mthd =:= 'DELETE' orelse Mthd =:= 'HEAD' ->
  	Type = assert_content_type(opts:val('Accept', [{'*', '*'}], Heads), Mod:content_provided()),
- 	Http = handle_response(Mod:Mthd(Type, Uri, Heads), Type),
+ 	Http = handle_response(Mod:Mthd(Type, Uri, Heads, Env), Type),
  	_    = pipe:a(Pipe, Http),
    {next_state, 'ACCEPT', S};
 
-handle_request(Mod, {http, _Uri, {Mthd,  Heads}}=Req, _Pipe, S)
+handle_request(Mod, {http, _Uri, {Mthd,  Heads, Env}}=Req, _Pipe, S)
  when Mthd =:= 'PUT' orelse Mthd =:= 'POST' orelse Mthd =:= 'PATCH' ->
  	Type = assert_content_type([opts:val('Content-Type', Heads)], Mod:content_accepted()),
    {next_state, 
@@ -134,7 +134,7 @@ handle_request(Mod, {http, _Uri, {Mthd,  Heads}}=Req, _Pipe, S)
       }
    };
 
-handle_request(_Mod, {http, _, {_, _}}, _Pipe, _S) ->
+handle_request(_Mod, {http, _, {_Mthd, _Heads, _Env}}, _Pipe, _S) ->
    throw({error, not_implemented}).
 
 %%

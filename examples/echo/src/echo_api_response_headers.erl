@@ -5,7 +5,7 @@
 	allowed_methods/0,
 	content_provided/0, 
    content_accepted/0,
-   'GET'/3
+   'GET'/4
 ]).
 
 %%
@@ -25,7 +25,7 @@ content_accepted() ->
    [].
 
 %%
-'GET'(_, Uri, _) ->
+'GET'(_, Uri, _Heads, _Env) ->
 	H = uri:q(Uri),
 	{ok, H, 
 		jsx:encode([

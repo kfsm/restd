@@ -5,7 +5,7 @@
 	allowed_methods/0,
 	content_provided/0, 
    content_accepted/0,
-   'GET'/3
+   'GET'/4
 ]).
 
 %%
@@ -25,8 +25,7 @@ content_accepted() ->
    [].
 
 %%
-'GET'(_, _, Heads) ->
-	{_, Env} = lists:keyfind(env,  1, Heads),
+'GET'(_, _, _Heads, Env) ->
 	{_, IP}  = lists:keyfind(peer, 1, Env),
 	{ok, 
 		jsx:encode([

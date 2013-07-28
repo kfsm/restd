@@ -5,7 +5,7 @@
 	allowed_methods/0,
 	content_provided/0, 
    content_accepted/0,
-   'GET'/3
+   'GET'/4
 ]).
 
 %%
@@ -25,7 +25,7 @@ content_accepted() ->
    [].
 
 %%
-'GET'(_, _, Heads) ->
+'GET'(_, _, Heads, _Env) ->
 	H = [header(X) || X <- lists:keydelete(env, 1, Heads)],
 	{ok, 
 		jsx:encode([{headers, H}])

@@ -5,7 +5,7 @@
 	allowed_methods/0,
 	content_provided/0, 
    content_accepted/0,
-   'GET'/3
+   'GET'/4
 ]).
 
 %% 
@@ -25,7 +25,7 @@ content_accepted() ->
    [].
 
 %%
-'GET'(_, _, _) ->
+'GET'(_, _Uri, _Heads, _Env) ->
 	file:read_file(
       filename:join([code:priv_dir(echo), "index.html"])
    ).

@@ -5,7 +5,7 @@
 	allowed_methods/0,
 	content_provided/0, 
    content_accepted/0,
-   'POST'/4
+   'POST'/5
 ]).
 
 %%
@@ -25,10 +25,9 @@ content_accepted() ->
    [{'*', '*'}].
 
 %%
-'POST'(_, Url, Heads, Msg) ->
-	{_, Env} = lists:keyfind(env,  1, Heads),
+'POST'(_, Url, Heads, Env, Msg) ->
 	{_, IP}  = lists:keyfind(peer, 1, Env),
-	H = [header(X) || X <- lists:keydelete(env, 1, Heads)],
+	H = [header(X) || X <- Heads],
 	{ok, 
 		jsx:encode([
 			{headers, H}, 
