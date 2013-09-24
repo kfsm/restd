@@ -1,13 +1,14 @@
 %% @description
 %%    acceptor process
 -module(restd_acceptor).
--behaviour(kfsm).
+-behaviour(pipe).
 
 -export([
 	start_link/2,
 	start_link/3,
 	init/1,
 	free/2,
+	ioctl/2,
 	'LISTEN'/3,
 	'ACCEPT'/3,
 	'HANDLE'/3
@@ -37,6 +38,8 @@ start_link(Uid, Uri, Pool) ->
 	%% TODO: registered service (pipe library)
 	pipe:start_link(?MODULE, [Uid, Uri, Pool], []).
 
+%%
+%%
 init([Uid, Uri]) ->
 	{ok, _} = knet:bind(Uri),
 	{ok, 'ACCEPT', 
@@ -54,8 +57,15 @@ init([Uid, Uri, Pool]) ->
 		}
 	}.
 
+%%
+%%
 free(_Reason, _S) ->
 	ok.
+
+%%
+%%
+ioctl(_, _) ->
+	throw(not_implemented).
 
 %%%------------------------------------------------------------------
 %%%
