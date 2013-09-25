@@ -5,7 +5,6 @@
 
 -export([
 	start_link/2,
-	start_link/3,
 	init/1,
 	free/2,
 	ioctl/2,
@@ -29,17 +28,9 @@
 %%%
 %%%------------------------------------------------------------------   
 
-%% start acceptor process
 start_link(Uid, Uri) ->
 	pipe:start_link(?MODULE, [Uid, Uri], []).
 
-%% start listener process
-start_link(Uid, Uri, Pool) ->
-	%% TODO: registered service (pipe library)
-	pipe:start_link(?MODULE, [Uid, Uri, Pool], []).
-
-%%
-%%
 init([Uid, Uri]) ->
 	{ok, _} = knet:bind(Uri),
 	{ok, 'ACCEPT', 
@@ -47,18 +38,8 @@ init([Uid, Uri]) ->
 			uid = Uid,
 			q   = deq:new()
 		}
-	};
-
-init([Uid, Uri, Pool]) ->
-	{ok, _} = knet:listen(Uri, [{acceptor, restd_acceptor_sup}, {pool, Pool}]),
-	{ok, 'LISTEN', 
-		#fsm{
-			uid = Uid
-		}
 	}.
 
-%%
-%%
 free(_Reason, _S) ->
 	ok.
 

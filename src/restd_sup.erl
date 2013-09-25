@@ -9,29 +9,25 @@
 ]).
 
 %%
+-define(CHILD(Type, I),            {I,  {I, start_link,   []}, permanent, 5000, Type, dynamic}).
+-define(CHILD(Type, I, Args),      {I,  {I, start_link, Args}, permanent, 5000, Type, dynamic}).
+-define(CHILD(Type, ID, I, Args),  {ID, {I, start_link, Args}, permanent, 5000, Type, dynamic}).
+
+%%
 %%
 start_link() ->
-   {ok, Sup} = supervisor:start_link({local, ?MODULE}, ?MODULE, []),
-   lists:foreach(
-   	fun default_service/1,
-   	proplists:delete(included_applications, application:get_all_env())
-   ),
-   {ok, Sup}.
+   supervisor:start_link({local, ?MODULE}, ?MODULE, []).
    
 init([]) -> 
    {ok,
       {
          {one_for_one, 4, 1800},
-         []
+         lists:map(
+            fun({Service, Opts}) ->
+                ?CHILD(supervisor, Service, restd_service_sup, [Service, Opts])
+            end,
+            proplists:delete(included_applications, application:get_all_env())
+         )
       }
    }.
-
-%%
-%% start default rest services
-default_service({Uid, Opts}) ->
-	{ok, _} = supervisor:start_child(?MODULE, {
-		Uid,
-		{restd_service_sup, start_link, [Uid, Opts]},
-		permanent, 60000, supervisor, dynamic
-	}).
 
