@@ -23,7 +23,7 @@ content_accepted() ->
 
 %%
 'GET'(_, _Url, _Heads, Env) ->
-	File = opts:val(<<"script">>, Env),
+	File = opts:val(<<"js">>, Env),
 	Root = case opts:val(htdoc, Env) of
 		X when is_atom(X) -> code:priv_dir(X);
 		X when is_list(X) -> X
