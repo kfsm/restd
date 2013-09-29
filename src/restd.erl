@@ -19,7 +19,8 @@
 
 -export([start/0]).
 -export([
-	register/2
+	register/3,
+	register/4
 ]).
 
 %%
@@ -35,8 +36,12 @@ start_link(Uid, Opts) ->
 
 %%
 %% register resource
--spec(register/2 :: (atom(), atom()) -> ok).
+-spec(register/3 :: (atom(), list() | binary(), atom()) -> ok).
+-spec(register/4 :: (atom(), list() | binary(), atom(), any()) -> ok).
 
-register(Uid, Mod) ->
-	true = ets:insert(restd, {Uid, uri:template(Mod:resource()), Mod}),
+register(Service, Uri, Mod) ->
+	register(Service, Uri, Mod, undefined).
+
+register(Service, Uri, Mod, Env) ->
+	true = ets:insert(restd, {Service, uri:template(Uri), Mod, Env}),
 	ok.

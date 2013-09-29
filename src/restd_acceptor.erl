@@ -163,40 +163,26 @@ lookup_resource(Uid, Uri) ->
 		%% not_available error
 		[] -> 
 			throw({error, not_available});
-		[{_, true, Mod}] ->
-			{[], Mod};		
-		[{_, Env, Mod}] ->
-			{Env, Mod}
+		[{_, true, Mod, Global}] ->
+			{add_env(Global, []),  Mod};		
+		[{_, Env, Mod, Global}] ->
+			{add_env(Global, Env), Mod}
 	end.
 
 lookup_resource_list(Uri, Resources) ->
-	Match = [{length(uri:segments(X)), uri:match(Uri, X), Mod} || {_, X, Mod} <- Resources],
+	Match = [{length(uri:segments(X)), uri:match(Uri, X), Mod, Env} || {_, X, Mod, Env} <- Resources],
 	lists:sort(
-		fun({A, _, _}, {B, _, _}) -> A =< B end,
+		fun({A, _, _, _}, {B, _, _, _}) -> A =< B end,
 		lists:filter(
-			fun({_, X, _}) -> X =/= false end,
+			fun({_, X, _, _}) -> X =/= false end,
 			Match
 		)
 	).	
-	% %% @todo propagate match environment (match & compare lenght at same tx)
 
-	% lists:sort(
-	% 	fun({A, _}, {B, _}) -> 
-	% 		length(uri:segments(A)) =< length(uri:segments(B)) 
-	% 	end, 
-	% 	lists:filter(
-	% 		fun({X, _}) -> uri:match(Uri, X) end,
-	% 		[{uri:match(Uri, X)} || {TUri, Mod} <- Resources]
-	% 	)
-	% ).
-	% % Req = uri:get(segments, Uri),
-	% % lists:sort(
-	% % 	fun({A, _}, {B, _}) -> size(A) =< size(B) end, 
-	% % 	lists:filter(
-	% % 		fun({X, _}) -> is_equiv(Req, tuple_to_list(X)) end,
-	% % 		List
-	% % 	)
-	% % ).
+add_env(undefined, Acc) ->
+	Acc;
+add_env(Global, Acc) ->
+	Acc ++ Global.
 	
 %%
 %% assert method

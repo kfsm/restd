@@ -24,7 +24,7 @@ start_link(Service, Opts) ->
    	nobind
    ]),
    lists:foreach(
-		fun(X) -> restd:register(Service, X) end,
+		fun(X) -> config(Service, X) end,
 		opts:val(mod, [], Opts)
 	),
 	supervisor:start_link(?MODULE, []).
@@ -36,3 +36,15 @@ init([]) ->
          []
       }
    }.
+
+%%
+%%
+config(Service, {Uri, Mod}) ->
+   restd:register(Service, Uri, Mod);
+
+config(Service, {Uri, Mod, Env}) ->
+   restd:register(Service, Uri, Mod, Env).
+
+
+
+

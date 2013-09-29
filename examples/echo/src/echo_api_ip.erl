@@ -1,16 +1,11 @@
 -module(echo_api_ip).
 
 -export([
-	resource/0,
 	allowed_methods/0,
 	content_provided/0, 
    content_accepted/0,
    'GET'/4
 ]).
-
-%%
-resource() ->
-	"*://*/ip".
 
 %%
 allowed_methods() ->

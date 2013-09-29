@@ -1,16 +1,12 @@
 -module(echo_api_status).
 
 -export([
-	resource/0,
 	allowed_methods/0,
 	content_provided/0, 
    content_accepted/0,
    'GET'/4
 ]).
 
-%%
-resource() ->
-	"*://*/status/:code".
 
 %%
 allowed_methods() ->

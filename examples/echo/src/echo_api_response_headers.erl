@@ -1,16 +1,11 @@
 -module(echo_api_response_headers).
 
 -export([
-	resource/0,
 	allowed_methods/0,
 	content_provided/0, 
    content_accepted/0,
    'GET'/4
 ]).
-
-%%
-resource() ->
-	"*://*/response-headers".
 
 %%
 allowed_methods() ->

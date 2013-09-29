@@ -1,16 +1,11 @@
 -module(echo_api_post).
 
 -export([
-	resource/0,
 	allowed_methods/0,
 	content_provided/0, 
    content_accepted/0,
    'POST'/5
 ]).
-
-%%
-resource() ->
-	"*://*/post".
 
 %%
 allowed_methods() ->
