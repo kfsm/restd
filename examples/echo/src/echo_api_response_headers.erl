@@ -10,7 +10,7 @@
 
 %%
 resource() ->
-	{'response-headers'}.
+	"*://*/response-headers".
 
 %%
 allowed_methods() ->

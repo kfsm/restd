@@ -38,5 +38,5 @@ start_link(Uid, Opts) ->
 -spec(register/2 :: (atom(), atom()) -> ok).
 
 register(Uid, Mod) ->
-	pns:register({restd, Uid}, Mod:resource(), Mod).
-
+	true = ets:insert(restd, {Uid, uri:template(Mod:resource()), Mod}),
+	ok.

@@ -10,7 +10,7 @@
 
 %%
 resource() ->
-	{cookies, '*'}.
+	"*://*/cookies/*".
 
 %%
 allowed_methods() ->

@@ -10,7 +10,7 @@
 
 %%
 resource() ->
-	{status, '_'}.
+	"*://*/status/:code".
 
 %%
 allowed_methods() ->
@@ -25,8 +25,6 @@ content_accepted() ->
    [].
 
 %%
-'GET'(_, Uri, _Heads, _Env) ->
-	[_, Code] = uri:get(segments, Uri),
-	list_to_integer(
-		binary_to_list(Code)
-	).
+'GET'(_, _Uri, _Heads, Env) ->
+	scalar:i(opts:val(<<"code">>, Env)).
+

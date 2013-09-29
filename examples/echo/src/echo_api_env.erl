@@ -1,4 +1,4 @@
--module(echo_api_ip).
+-module(echo_api_env).
 
 -export([
 	resource/0,
@@ -10,7 +10,7 @@
 
 %%
 resource() ->
-	"*://*/ip".
+	"*://*/env/:name".
 
 %%
 allowed_methods() ->
@@ -26,9 +26,16 @@ content_accepted() ->
 
 %%
 'GET'(_, _, _Heads, Env) ->
-	{_, IP}  = lists:keyfind(peer, 1, Env),
 	{ok, 
 		jsx:encode([
-			{origin, list_to_binary(inet_parse:ntoa(IP))}
+			{env,   [env(X) || X <- Env]}
 		])
 	}.
+
+env({Key, Val})
+ when is_tuple(Val) ->
+ 	{Key, scalar:s(io_lib:format("~p", [Val]))};
+
+env({Key, Val}) ->
+	{Key, scalar:s(Val)}.
+

@@ -10,7 +10,7 @@
 
 %%
 resource() ->
-	{'redirect-to'}.
+	"*://*/redirect-to".
 
 %%
 allowed_methods() ->
@@ -26,5 +26,5 @@ content_accepted() ->
 
 %%
 'GET'(_, Url, _Heads, _Env) ->
-	{302, [{'Location', uri:q(url, Url)}], <<>>}.
+	{302, [{'Location', uri:q(url, <<>>, Url)}], <<>>}.
 

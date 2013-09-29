@@ -65,12 +65,13 @@ ioctl(_, _) ->
 
 %%
 %%
-'ACCEPT'({http, Uri, {Mthd, _Head, _Env}}=Req, Pipe, S) ->
+'ACCEPT'({http, Uri, {Mthd, Head, HtEnv}}, Pipe, S) ->
 	try
-		Mod = lookup_resource(S#fsm.uid, Uri),
+		{RtEnv, Mod} = lookup_resource(S#fsm.uid, Uri),
 		ok  = assert_method(Mthd, Mod:allowed_methods()),
-		handle_request(Mod, Req, Pipe, S)
+		handle_request(Mod, {http, Uri, {Mthd, Head, HtEnv ++ RtEnv}}, Pipe, S)
 	catch _:Reason ->
+		io:format("=> ~p~n", [erlang:get_stacktrace()]),
 		pipe:a(Pipe, handle_failure(Reason)),
 		{next_state, 'ACCEPT', S}
 	end;
@@ -113,7 +114,7 @@ handle_request(Mod, {http, Uri, {Mthd,  Heads, Env}}, Pipe, S)
  	_    = pipe:a(Pipe, Http),
    {next_state, 'ACCEPT', S};
 
-handle_request(Mod, {http, _Uri, {Mthd,  Heads, Env}}=Req, _Pipe, S)
+handle_request(Mod, {http, _Uri, {Mthd,  Heads, _Env}}=Req, _Pipe, S)
  when Mthd =:= 'PUT' orelse Mthd =:= 'POST' orelse Mthd =:= 'PATCH' ->
  	Type = assert_content_type([opts:val('Content-Type', Heads)], Mod:content_accepted()),
    {next_state, 
@@ -155,27 +156,47 @@ handle_failure(Reason) ->
    {500,    [{'Content-Type', {text, plain}}, {'Content-Length', 0}], <<>>}.
 
 
-
 %%
 %% 
 lookup_resource(Uid, Uri) ->
-	case lookup_resource_list(Uri, pns:lookup({restd, Uid}, '_')) of
+	case lookup_resource_list(Uri, ets:lookup(restd, Uid)) of
 		%% not_available error
 		[] -> 
 			throw({error, not_available});
-		[{_, Mod}] ->
-			Mod
+		[{_, true, Mod}] ->
+			{[], Mod};		
+		[{_, Env, Mod}] ->
+			{Env, Mod}
 	end.
 
-lookup_resource_list(Uri, List) ->
-	Req = uri:get(segments, Uri),
+lookup_resource_list(Uri, Resources) ->
+	Match = [{length(uri:segments(X)), uri:match(Uri, X), Mod} || {_, X, Mod} <- Resources],
 	lists:sort(
-		fun({A, _}, {B, _}) -> size(A) =< size(B) end, 
+		fun({A, _, _}, {B, _, _}) -> A =< B end,
 		lists:filter(
-			fun({X, _}) -> is_equiv(Req, tuple_to_list(X)) end,
-			List
+			fun({_, X, _}) -> X =/= false end,
+			Match
 		)
-	).
+	).	
+	% %% @todo propagate match environment (match & compare lenght at same tx)
+
+	% lists:sort(
+	% 	fun({A, _}, {B, _}) -> 
+	% 		length(uri:segments(A)) =< length(uri:segments(B)) 
+	% 	end, 
+	% 	lists:filter(
+	% 		fun({X, _}) -> uri:match(Uri, X) end,
+	% 		[{uri:match(Uri, X)} || {TUri, Mod} <- Resources]
+	% 	)
+	% ).
+	% % Req = uri:get(segments, Uri),
+	% % lists:sort(
+	% % 	fun({A, _}, {B, _}) -> size(A) =< size(B) end, 
+	% % 	lists:filter(
+	% % 		fun({X, _}) -> is_equiv(Req, tuple_to_list(X)) end,
+	% % 		List
+	% % 	)
+	% % ).
 	
 %%
 %% assert method

@@ -10,7 +10,7 @@
 
 %%
 resource() ->
-	{headers}.
+	"*://*/headers".
 
 %%
 allowed_methods() ->
@@ -26,9 +26,10 @@ content_accepted() ->
 
 %%
 'GET'(_, _, Heads, _Env) ->
-	H = [header(X) || X <- lists:keydelete(env, 1, Heads)],
 	{ok, 
-		jsx:encode([{headers, H}])
+		jsx:encode([
+			{headers,  [header(X) || X <- Heads]}
+		])
 	}.
 
 header({'Content-Type', {Type, SubType}}) ->

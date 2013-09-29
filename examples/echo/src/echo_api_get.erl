@@ -10,7 +10,7 @@
 
 %%
 resource() ->
-	{get}.
+	"*://*/get".
 
 %%
 allowed_methods() ->

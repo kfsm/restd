@@ -10,7 +10,7 @@
 
 %%
 resource() ->
-	{'user-agent'}.
+	"*://*/user-agent".
 
 %%
 allowed_methods() ->
