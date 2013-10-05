@@ -238,7 +238,7 @@ assert_allowed_method(Mthd, Allowed) ->
 %%
 %% check if request is authorized
 is_request_authorized(_Mthd, {Uri, _Head, _Env}=Req, Mod) ->
-	case erlang:function_exported(Mod, is_authorized, 2) of
+	case erlang:function_exported(Mod, is_authorized, 1) of
 		%
 		true  ->
 			case Mod:is_authorized(Uri, Req) of
@@ -282,10 +282,10 @@ assert_content_type(A, B) ->
 %%
 %% check if request is authorized
 is_resource_exists(_Mthd, {Uri, _Head, _Env}=Req, Mod) ->
-	case erlang:function_exported(Mod, resource_exists, 2) of
+	case erlang:function_exported(Mod, exists, 1) of
 		%
 		true  ->
-			case Mod:resource_exists(Uri, Req) of
+			case Mod:exists(Req) of
 				true ->
 					ok;
 				_  ->

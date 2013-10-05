@@ -4,7 +4,7 @@
 
 -export([
 	content_provided/0, 
-	resource_exists/1,
+	exists/1,
    'GET'/2
 ]).
 
@@ -15,7 +15,7 @@ content_provided() ->
 
 %%
 %%
-resource_exists({Url, _Heads, Env}) ->
+exists({Url, _Heads, Env}) ->
 	filelib:is_file(filename(Url, Env)).
 
 %%
