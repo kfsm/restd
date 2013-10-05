@@ -4,7 +4,7 @@
 	allowed_methods/0,
 	content_provided/0, 
    content_accepted/0,
-   'POST'/5
+   'POST'/3
 ]).
 
 %%
@@ -20,14 +20,14 @@ content_accepted() ->
    [{'*', '*'}].
 
 %%
-'POST'(_, Url, Heads, Env, Msg) ->
+'POST'(_, {Url, Heads, Env}, Msg) ->
 	{_, IP}  = lists:keyfind(peer, 1, Env),
 	H = [header(X) || X <- Heads],
 	{ok, 
 		jsx:encode([
 			{headers, H}, 
 			{origin,  list_to_binary(inet_parse:ntoa(IP))}, 
-			{url,     uri:to_binary(Url)},
+			{url,     uri:s(Url)},
 			{data,    Msg}
 		])
 	}.

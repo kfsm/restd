@@ -4,7 +4,7 @@
 	allowed_methods/0,
 	content_provided/0, 
    content_accepted/0,
-   'GET'/4
+   'GET'/2
 ]).
 
 %%
@@ -20,7 +20,7 @@ content_accepted() ->
    [].
 
 %%
-'GET'(_, _, Heads, _Env) ->
+'GET'(_, {_, Heads, _Env}) ->
 	{_, UA} = lists:keyfind('User-Agent', 1, Heads),
 	{ok, 
 		jsx:encode([

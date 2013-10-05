@@ -4,7 +4,7 @@
 	allowed_methods/0,
 	content_provided/0, 
    content_accepted/0,
-   'GET'/4
+   'GET'/2
 ]).
 
 %%
@@ -13,17 +13,21 @@ allowed_methods() ->
 
 %%
 content_provided() ->
-   [{application, json}].
+   [{application, json}, {text, plain}].
 
 %%
 content_accepted() ->
    [].
 
 %%
-'GET'(_, _, _Heads, Env) ->
+'GET'({text, plain}, {_Url, _Heads, Env}) ->
+   {_, IP}  = lists:keyfind(peer, 1, Env),
+   {ok, scalar:s(inet_parse:ntoa(IP))};
+
+'GET'(_, {_Url, _Heads, Env}) ->
 	{_, IP}  = lists:keyfind(peer, 1, Env),
 	{ok, 
 		jsx:encode([
-			{origin, list_to_binary(inet_parse:ntoa(IP))}
+			{origin, scalar:s(inet_parse:ntoa(IP))}
 		])
 	}.

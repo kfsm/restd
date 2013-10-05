@@ -1,7 +1,7 @@
 {application, restd,
    [
       {description, "rest api daemon"},
-      {vsn,         "0.0.0"},
+      {vsn,         "0.1.0"},
       {modules,     [
          restd,
          restd_sup,

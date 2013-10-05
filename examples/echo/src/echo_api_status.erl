@@ -4,7 +4,7 @@
 	allowed_methods/0,
 	content_provided/0, 
    content_accepted/0,
-   'GET'/4
+   'GET'/2
 ]).
 
 
@@ -21,6 +21,6 @@ content_accepted() ->
    [].
 
 %%
-'GET'(_, _Uri, _Heads, Env) ->
+'GET'(_, {_Uri, _Heads, Env}) ->
 	scalar:i(opts:val(<<"code">>, Env)).
 

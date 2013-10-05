@@ -4,7 +4,7 @@
 	allowed_methods/0,
 	content_provided/0, 
    content_accepted/0,
-   'GET'/4
+   'GET'/2
 ]).
 
 %%
@@ -20,14 +20,14 @@ content_accepted() ->
    [].
 
 %%
-'GET'(_, Url, Heads, Env) ->
+'GET'(_, {Url, Heads, Env}) ->
 	{_, IP}  = lists:keyfind(peer, 1, Env),
 	H = [header(X) || X <- Heads],
 	{ok, 
 		jsx:encode([
 			{headers, H}, 
-			{origin,  list_to_binary(inet_parse:ntoa(IP))}, 
-			{url,     uri:to_binary(Url)}
+			{origin,  scalar:s(inet_parse:ntoa(IP))}, 
+			{url,     uri:s(Url)}
 		])
 	}.
 
