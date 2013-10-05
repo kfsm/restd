@@ -36,7 +36,7 @@ filename(Url, Env) ->
 				[]        ->
 				   filename:join([htdoc(Env), "index.html"]);
 				List      ->
-					filename:join([htdoc(Env)] ++ [X || X <- List, X =/= ".", X =/= "..", X =/= "~~"])
+					filename:join([htdoc(Env)] ++ [scalar:c(X) || X <- List, X =/= <<".">>, X =/= <<"..">>, X =/= <<$~>>])
 			end;
 		File      ->
 			filename:join([htdoc(Env), scalar:c(File)])
