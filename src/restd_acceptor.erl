@@ -199,7 +199,7 @@ is_resource_available(_Mthd, {Uri, _Head, _Env}, Service) ->
 list_available_resources(Uri, Resources) ->
 	Match = [{length(uri:segments(TUri)), uri:match(Uri, TUri), Mod, Env} || {_, TUri, Mod, Env} <- Resources],
 	lists:sort(
-		fun({A, _, _, _}, {B, _, _, _}) -> A =< B end,
+		fun({A, _, _, _}, {B, _, _, _}) -> A >= B end,
 		lists:filter(
 			fun({_, X, _, _}) -> X =/= false end,
 			Match
