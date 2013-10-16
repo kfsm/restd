@@ -193,7 +193,12 @@ is_resource_available(_Mthd, {Uri, _Head, _Env}, Service) ->
 		%% available
 		Match ->
 			{_, Env, Mod, GEnv} = hd(Match),
-			{Mod, build_request_env(GEnv, Env)}
+			case code:is_loaded(Mod) of
+				false ->
+					throw({error, not_available});
+				_     ->
+					{Mod, build_request_env(GEnv, Env)}
+			end
 	end.
 
 list_available_resources(Uri, Resources) ->

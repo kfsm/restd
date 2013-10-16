@@ -43,5 +43,6 @@ register(Service, Uri, Mod) ->
 	register(Service, Uri, Mod, undefined).
 
 register(Service, Uri, Mod, Env) ->
+	_    = code:load(Mod),
 	true = ets:insert(restd, {Service, uri:template(Uri), Mod, Env}),
 	ok.
