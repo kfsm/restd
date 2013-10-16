@@ -17,6 +17,7 @@
 -record(fsm, {
 	uid       = undefined :: atom(),   %% service identity
 
+	method    = undefined :: atom(),
 	resource  = undefined :: atom(),   %% current resource handler (payload handling)
 	request   = undefined :: any(),    %% current request
 	content   = undefined :: any(),    %% current content handler
@@ -74,6 +75,7 @@ ioctl(_, _) ->
 			true  ->
    			{next_state, 'HANDLE',
       			S#fsm{
+      				method   = Mthd,
          			resource = Mod,
          			request  = Req,
          			content  = Type,
@@ -109,14 +111,14 @@ ioctl(_, _) ->
    	}
    }; 
 
-'HANDLE'({http, _Uri, eof}, Pipe, #fsm{resource=Mod, request=Req, content=Type}=S) ->
+'HANDLE'({http, _Uri, eof}, Pipe, #fsm{method=Mthd, resource=Mod, request=Req, content=Type}=S) ->
    try
-   	{Mthd, _, _} = Req,
    	Msg  = erlang:iolist_to_binary(deq:list(S#fsm.q)),
 		Http = handle_response(Mod:Mthd(Type, Req, Msg), Type),
 		_    = pipe:a(Pipe, Http),
 		{next_state, 'ACCEPT', S#fsm{q = deq:new()}}
    catch _:Reason ->
+   	lager:notice("restd request error ~p: ~p", [Reason, erlang:get_stacktrace()]),
    	pipe:a(Pipe, handle_failure(Reason)),
 		{next_state, 'ACCEPT', S}
    end.
