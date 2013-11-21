@@ -10,7 +10,8 @@
 	ioctl/2,
 	'LISTEN'/3,
 	'ACCEPT'/3,
-	'HANDLE'/3
+	'HANDLE'/3,
+	'STREAM'/3
 ]).
 
 %% default state
@@ -84,9 +85,16 @@ ioctl(_, _) ->
    			};
 
 			false ->
-				Http = handle_response(Mod:Mthd(Type, Req), Type),
- 				_    = pipe:a(Pipe, Http),
- 				{next_state, 'ACCEPT', S}
+				case handle_response(Mod:Mthd(Type, Req), Type) of
+					%% no-payload, streaming
+					{_Code, _Heads} = Http ->
+		 				_ = pipe:a(Pipe, Http),
+ 						{next_state, 'STREAM', S};
+ 					%% there is a payload
+ 					{_Code, _Heads, _Msg} = Http ->
+		 				_ = pipe:a(Pipe, Http),
+ 						{next_state, 'ACCEPT', S}
+ 				end
 		end
 	catch _:Reason ->
 		lager:notice("restd request error ~p: ~p", [Reason, erlang:get_stacktrace()]),
@@ -114,17 +122,56 @@ ioctl(_, _) ->
 'HANDLE'({http, _Uri, eof}, Pipe, #fsm{method=Mthd, resource=Mod, request=Req, content=Type}=S) ->
    try
    	Msg  = erlang:iolist_to_binary(deq:list(S#fsm.q)),
-		Http = handle_response(Mod:Mthd(Type, Req, Msg), Type),
-		_    = pipe:a(Pipe, Http),
-		{next_state, 'ACCEPT', S#fsm{q = deq:new()}}
+		case handle_response(Mod:Mthd(Type, Req, Msg), Type) of
+			%% no-payload, streaming
+			{_Code, _Heads} = Http ->
+ 				_ = pipe:a(Pipe, Http),
+				{next_state, 'STREAM', S#fsm{q = deq:new()}};
+			%% there is a payload
+			{_Code, _Heads, _Msg} = Http ->
+ 				_ = pipe:a(Pipe, Http),
+				{next_state, 'ACCEPT', S#fsm{q = deq:new()}}
+		end
    catch _:Reason ->
    	lager:notice("restd request error ~p: ~p", [Reason, erlang:get_stacktrace()]),
    	pipe:a(Pipe, handle_failure(Reason)),
 		{next_state, 'ACCEPT', S}
    end.
 
+%%%------------------------------------------------------------------
+%%%
+%%% STREAM
+%%%
+%%%------------------------------------------------------------------   
+
+'STREAM'(Msg, Pipe, #fsm{resource=Mod, content=Type}=S) ->
+	try
+		case Mod:stream(Type, Msg) of
+			eof  -> 
+				pipe:b(Pipe, <<>>),
+				{next_state, 'ACCEPT', S};
+			Http -> 
+				pipe:b(Pipe, Http),
+				{next_state, 'STREAM', S}
+		end
+	catch _:Reason ->
+   	lager:notice("restd request error ~p: ~p", [Reason, erlang:get_stacktrace()]),
+   	pipe:a(Pipe, handle_failure(Reason)),
+		{next_state, 'ACCEPT', S}
+	end.
+
+
 %%
 %%
+handle_response(stream, Type) ->
+ 	{200, [{'Content-Type', Type}, {'Transfer-Encoding', <<"chunked">>}]};
+
+handle_response({stream, Heads}, Type) ->
+	case lists:keyfind('Content-Type', 1, Heads) of
+      false -> {200, [{'Transfer-Encoding', <<"chunked">>}, {'Content-Type', Type} | Heads]};
+      _     -> {200, [{'Transfer-Encoding', <<"chunked">>} | Heads]}
+   end; 	
+
 handle_response({Code, Msg}, Type)
  when is_binary(Msg) ->
  	{Code, [{'Content-Type', Type}, {'Content-Length', size(Msg)}], Msg};
