@@ -89,7 +89,7 @@ ioctl(_, _) ->
 					%% no-payload, streaming
 					{_Code, _Heads} = Http ->
 		 				_ = pipe:a(Pipe, Http),
- 						{next_state, 'STREAM', S};
+ 						{next_state, 'STREAM', S#fsm{resource=Mod, content=Type}};
  					%% there is a payload
  					{_Code, _Heads, _Msg} = Http ->
 		 				_ = pipe:a(Pipe, Http),
