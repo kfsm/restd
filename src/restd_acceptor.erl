@@ -150,6 +150,8 @@ ioctl(_, _) ->
 			eof  -> 
 				pipe:b(Pipe, <<>>),
 				{next_state, 'ACCEPT', S};
+			undefined ->
+				{next_state, 'STREAM', S};
 			Http -> 
 				pipe:b(Pipe, Http),
 				{next_state, 'STREAM', S}
