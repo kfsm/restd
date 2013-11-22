@@ -144,6 +144,10 @@ ioctl(_, _) ->
 %%%
 %%%------------------------------------------------------------------   
 
+'STREAM'({http, _Url, eof}, _Pipe, S) ->
+	% @todo: use http eof as a trigger for resource invocation
+   {next_state, 'STREAM', S};
+
 'STREAM'(Msg, Pipe, #fsm{resource=Mod, request=Req, content=Type}=S) ->
 	try
 		case Mod:stream(Type, Req, pipe:a(Pipe), Msg) of
