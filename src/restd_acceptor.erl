@@ -146,7 +146,7 @@ ioctl(_, _) ->
 
 'STREAM'(Msg, Pipe, #fsm{resource=Mod, request=Req, content=Type}=S) ->
 	try
-		case Mod:stream(Type, Req, Msg) of
+		case Mod:stream(Type, Req, pipe:a(Pipe), Msg) of
 			eof  -> 
 				pipe:b(Pipe, <<>>),
 				{next_state, 'ACCEPT', S};
