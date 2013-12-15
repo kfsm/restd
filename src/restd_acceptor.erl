@@ -148,22 +148,33 @@ ioctl(_, _) ->
 	% @todo: use http eof as a trigger for resource invocation
    {next_state, 'STREAM', S};
 
+%%
+%% handles message from "external" processes, pipe binds either
+%%  "process" <-> "http" (if external process support pipe protocol)
+%%  "http"    <-> undefined
 'STREAM'(Msg, Pipe, #fsm{resource=Mod, request=Req, content=Type}=S) ->
 	try
 		case Mod:stream(Type, Req, pipe:a(Pipe), Msg) of
 			eof  -> 
-				pipe:b(Pipe, <<>>),
+				pipe:send(pipe_sink(Pipe), <<>>),
 				{next_state, 'ACCEPT', S};
 			undefined ->
 				{next_state, 'STREAM', S};
 			Http -> 
-				pipe:b(Pipe, Http),
+				pipe:send(pipe_sink(Pipe), Http),
 				{next_state, 'STREAM', S}
 		end
 	catch _:Reason ->
    	lager:notice("restd request error ~p: ~p", [Reason, erlang:get_stacktrace()]),
-   	pipe:a(Pipe, handle_failure(Reason)),
+   	pipe:send(pipe_sink(Pipe), handle_failure(Reason)),
 		{next_state, 'ACCEPT', S}
+	end.
+
+%%
+pipe_sink(Pipe) ->
+	case pipe:b(Pipe) of
+		undefined -> pipe:a(Pipe);
+		Pid       -> Pid
 	end.
 
 
@@ -341,7 +352,7 @@ assert_content_type(A, B) ->
 
 %%
 %% check if request is authorized
-is_resource_exists(_Mthd, {Uri, _Head, _Env}=Req, Mod) ->
+is_resource_exists(_Mthd, {_Uri, _Head, _Env}=Req, Mod) ->
 	case erlang:function_exported(Mod, exists, 1) of
 		%
 		true  ->
