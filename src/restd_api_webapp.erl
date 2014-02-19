@@ -47,7 +47,12 @@ filename(Url, Env) ->
 htdoc(Env) ->
 	case opts:val(htdoc, Env) of
 		X when is_atom(X) -> 
-			filename:join([code:priv_dir(X), htdoc]);
+			case code:priv_dir(X) of
+				{error,bad_name} -> 
+					filename:join([priv, htdoc]);
+				Root -> 
+					filename:join([Root, htdoc])
+			end;
 		X when is_list(X) ->
 			X 
 	end.

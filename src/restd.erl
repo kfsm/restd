@@ -43,6 +43,8 @@ register(Service, Uri, Mod) ->
 	register(Service, Uri, Mod, undefined).
 
 register(Service, Uri, Mod, Env) ->
-	{module, _} = code:load_file(Mod),
+   %% do not allow to use ephemeral deployment
+   %{module, _} = code:load_file(Mod),
+	_    = code:load_file(Mod),
 	true = ets:insert(restd, {Service, uri:template(Uri), Mod, Env}),
 	ok.
