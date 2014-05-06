@@ -17,12 +17,7 @@
 %%
 %%
 start_link(Service, Opts) ->
-	{ok, _} = knet:listen(opts:val(uri, Opts), [
-   	{acceptor, {restd_acceptor, [Service]}}, 
-   	opts:get(pool,    10, Opts),
-   	opts:get(backlog, 25, Opts),
-   	nobind
-   ]),
+   {ok, _} = listen(opts:val(uri, Opts), Service, Opts),
    lists:foreach(
 		fun(X) -> config(Service, X) end,
 		opts:val(mod, [], Opts)
@@ -44,6 +39,19 @@ config(Service, {Uri, Mod}) ->
 
 config(Service, {Uri, Mod, Env}) ->
    restd:register(Service, Uri, Mod, Env).
+
+%%
+%% 
+listen(Uri, Service, Opts) ->
+   Sock = opts:val(sock, [], Opts),
+   knet:listen(Uri, [
+      {acceptor, {restd_acceptor, [Service]}}, 
+      opts:get(pool,    10, Opts),
+      opts:get(backlog, 25, Opts),
+      nobind | Sock
+   ]).
+
+
 
 
 

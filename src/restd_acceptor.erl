@@ -352,6 +352,7 @@ assert_content_type(A, B) ->
 
 %%
 %% check if request is authorized
+%% @todo: there is diff semantic for put / post vs get
 is_resource_exists(_Mthd, {_Uri, _Head, _Env}=Req, Mod) ->
 	case erlang:function_exported(Mod, exists, 1) of
 		%
