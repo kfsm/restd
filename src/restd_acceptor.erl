@@ -127,6 +127,15 @@ ioctl(_, _) ->
 			{_Code, _Heads} = Http ->
  				_ = pipe:a(Pipe, Http),
 				{next_state, 'STREAM', S#fsm{q = deq:new()}};
+         %% there is a payload (lazy stream)
+         {Code, Heads, {s, _, _}=Stream} ->
+            _ = pipe:a(Pipe, {Code, Heads}),
+            stream:foreach(
+               fun(X) -> pipe:a(Pipe, X) end,
+               Stream
+            ),
+            pipe:a(Pipe, <<>>),
+            {next_state, 'ACCEPT', S#fsm{q = deq:new()}};
 			%% there is a payload
 			{_Code, _Heads, _Msg} = Http ->
  				_ = pipe:a(Pipe, Http),
@@ -189,6 +198,9 @@ handle_response({stream, Heads}, Type) ->
       _     -> {200, [{'Transfer-Encoding', <<"chunked">>} | Heads]}
    end; 	
 
+handle_response({Code, {s, _, _}=Stream}, Type) ->
+   {Code, [{'Content-Type', Type}, {'Transfer-Encoding', <<"chunked">>}], Stream};
+
 handle_response({Code, Msg}, Type)
  when is_binary(Msg) ->
  	{Code, [{'Content-Type', Type}, {'Content-Length', size(Msg)}], Msg};
@@ -196,6 +208,12 @@ handle_response({Code, Msg}, Type)
 handle_response({Code, Msg}, Type)
  when is_list(Msg) ->
  	handle_response({Code, erlang:iolist_to_binary(Msg)}, Type);
+
+handle_response({Code, Heads, {s, _, _}=Stream}, Type) ->
+   case lists:keyfind('Content-Type', 1, Heads) of
+      false -> {Code, [{'Content-Type', Type}, {'Transfer-Encoding', <<"chunked">>} | Heads], Stream};
+      _     -> {Code, [{'Transfer-Encoding', <<"chunked">>} | Heads], Stream}
+   end;  
 
 handle_response({Code, Heads, Msg}, Type)
  when is_binary(Msg) ->
