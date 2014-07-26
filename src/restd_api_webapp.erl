@@ -23,7 +23,13 @@ exists({Url, _Heads, Env}) ->
 'GET'(_, {Url, _Heads, Env}) ->
 	Filename   = filename(Url, Env),
 	{ok, File} = file:read_file(Filename),
-	{ok, [{'Content-Type', mime(filename:extension(Filename))}], File}.
+	{ok, 
+      [
+         {'Content-Type', mime(filename:extension(Filename))}
+        ,{'Access-Control-Allow-Origin', <<"*">>}
+      ], 
+      File
+   }.
 
 %%
 %%

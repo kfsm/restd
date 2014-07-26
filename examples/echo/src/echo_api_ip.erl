@@ -21,13 +21,13 @@ content_accepted() ->
 
 %%
 'GET'({text, plain}, {_Url, _Heads, Env}) ->
-   {_, IP}  = lists:keyfind(peer, 1, Env),
-   {ok, scalar:s(inet_parse:ntoa(IP))};
+   {_, Peer}  = lists:keyfind(peer, 1, Env),
+   {ok, uri:host(Peer)};
 
 'GET'(_, {_Url, _Heads, Env}) ->
-	{_, IP}  = lists:keyfind(peer, 1, Env),
+	{_, Peer}  = lists:keyfind(peer, 1, Env),
 	{ok, 
 		jsx:encode([
-			{origin, scalar:s(inet_parse:ntoa(IP))}
+			{origin, uri:host(Peer)}
 		])
 	}.

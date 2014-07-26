@@ -29,7 +29,7 @@ content_accepted() ->
 
 env({Key, Val})
  when is_tuple(Val) ->
- 	{Key, scalar:s(io_lib:format("~p", [Val]))};
+ 	{Key, scalar:s(io_lib:format("~120p", [Val]))};
 
 env({Key, Val}) ->
 	{Key, scalar:s(Val)}.

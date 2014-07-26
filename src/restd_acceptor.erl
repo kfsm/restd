@@ -68,9 +68,9 @@ ioctl(_, _) ->
 
 %%
 %%
-'ACCEPT'({http, Uri, {Mthd, _Head, _Env}=Req0}, Pipe, S) ->
+'ACCEPT'({http, _, {Mthd, _Uri, _Head, _Env}=Req0}, Pipe, S) ->
 	try
-		{Mod, Type, Req} = validate_request(Uri, Req0, S#fsm.uid),
+		{Mod, Type, Req} = validate_request(Req0, S#fsm.uid),
 		case is_payload_method(Mthd) of
 			%% stream payload in
 			true  ->
@@ -237,7 +237,7 @@ handle_failure(Reason) ->
 
 %%
 %% validate resource request and return request environment
-validate_request(Uri, {Mthd, Heads, Env}, Service) ->
+validate_request({Mthd, Uri, Heads, Env}, Service) ->
 	{Mod, GEnv} = is_resource_available(Mthd, {Uri, Heads, Env}, Service),
 	Req = {Uri, Heads, GEnv ++ Env}, 
 	_   = is_method_allowed(Mthd, Req, Mod),

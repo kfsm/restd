@@ -21,12 +21,12 @@ content_accepted() ->
 
 %%
 'POST'(_, {Url, Heads, Env}, Msg) ->
-	{_, IP}  = lists:keyfind(peer, 1, Env),
+	{_, Peer}  = lists:keyfind(peer, 1, Env),
 	H = [header(X) || X <- Heads],
 	{ok, 
 		jsx:encode([
 			{headers, H}, 
-			{origin,  list_to_binary(inet_parse:ntoa(IP))}, 
+			{origin,  uri:host(Peer)}, 
 			{url,     uri:s(Url)},
 			{data,    Msg}
 		])
