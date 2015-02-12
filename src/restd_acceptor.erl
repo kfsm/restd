@@ -4,7 +4,7 @@
 -behaviour(pipe).
 
 -export([
-	start_link/2,
+	start_link/3,
 	init/1,
 	free/2,
 	ioctl/2,
@@ -31,11 +31,11 @@
 %%%
 %%%------------------------------------------------------------------   
 
-start_link(Uid, Uri) ->
-	pipe:start_link(?MODULE, [Uid, Uri], []).
+start_link(Uid, Uri, Opts) ->
+	pipe:start_link(?MODULE, [Uid, Uri, Opts], []).
 
-init([Uid, Uri]) ->
-	{ok, _} = knet:bind(Uri),
+init([Uid, Uri, Opts]) ->
+	{ok, _} = knet:bind(Uri, Opts),
 	{ok, 'ACCEPT', 
 		#fsm{
 			uid = Uid,
