@@ -330,7 +330,7 @@ is_request_authorized(_Mthd, {Uri, _Head, _Env}=Req, Mod) ->
 	case erlang:function_exported(Mod, is_authorized, 1) of
 		%
 		true  ->
-			case Mod:is_authorized(Uri, Req) of
+			case Mod:is_authorized(Req) of
 				ok ->
 					ok;
 				_  ->
