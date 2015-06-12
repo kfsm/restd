@@ -1,0 +1,31 @@
+{code_paths,      [
+	"./ebin" 
+  ,"./deps/feta"
+  ,"./deps/kfsm"
+  ,"./deps/plib"
+  ,"./deps/pipe"
+  ,"./deps/knet"
+  ,"./deps/pns"
+  ,"./deps/jsx"
+  ,"./deps/htstream"
+  ,"./deps/datum"
+  ,"./deps/lager"
+]}.
+{log_level,       info}.
+{report_interval, 1}.
+{driver,          restd_benchmark}.
+
+%%
+%% workload
+{mode,           max}.
+{duration,         1}.
+{concurrent,      10}.
+{key_generator,   {uniform_int, 1000000}}.
+{value_generator, {fixed_bin, 1000}}.
+
+{operations, [
+   {put,    5} 
+  ,{get,    5}
+]}.
+
+{url,   "http://localhost:8080/ip"}.
