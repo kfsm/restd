@@ -262,7 +262,7 @@ validate_request({Mthd, Uri, Heads, Env}, Service) ->
 	_   = is_request_authorized(Mthd, Req, Mod),
 	Type= is_content_supported(Mthd, Req, Mod),
 	%% @todo accept- langauge, charset, encoding 
-   _   = is_resource_exists(Mthd, Req, Mod),  
+   _   = is_resource_exists(Mthd, Type, Req, Mod),  
    {Mod, Type, Req}.
 
 
@@ -326,11 +326,11 @@ assert_allowed_method(Mthd, Allowed) ->
 
 %%
 %% check if request is authorized
-is_request_authorized(_Mthd, {Uri, _Head, _Env}=Req, Mod) ->
-	case erlang:function_exported(Mod, is_authorized, 1) of
+is_request_authorized(Mthd, {_Uri, _Head, _Env}=Req, Mod) ->
+	case erlang:function_exported(Mod, authorize, 2) of
 		%
 		true  ->
-			case Mod:is_authorized(Req) of
+			case Mod:authorize(Mthd, Req) of
 				ok ->
 					ok;
 				_  ->
@@ -371,11 +371,11 @@ assert_content_type(A, B) ->
 %%
 %% check if request is authorized
 %% @todo: there is diff semantic for put / post vs get
-is_resource_exists(_Mthd, {_Uri, _Head, _Env}=Req, Mod) ->
-	case erlang:function_exported(Mod, exists, 1) of
+is_resource_exists(_Mthd, Type, {_Uri, _Head, _Env}=Req, Mod) ->
+	case erlang:function_exported(Mod, exists, 2) of
 		%
 		true  ->
-			case Mod:exists(Req) of
+			case Mod:exists(Type, Req) of
 				true ->
 					ok;
 				_  ->
