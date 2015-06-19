@@ -3,19 +3,19 @@
 -module(restd_api_webapp).
 
 -export([
-	content_provided/0, 
-	exists/1,
+	content_provided/1, 
+	exists/2,
    'GET'/2
 ]).
 
 %%
 %%
-content_provided() ->
+content_provided(_Req) ->
    [{'*', '*'}].
 
 %%
 %%
-exists({Url, _Heads, Env}) ->
+exists(_, {Url, _Heads, Env}) ->
 	filelib:is_file(filename(Url, Env)).
 
 %%

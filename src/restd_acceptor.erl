@@ -279,7 +279,9 @@ is_resource_available(_Mthd, {Uri, _Head, _Env}, Service) ->
 			{_, Env, Mod, GEnv} = hd(Match),
 			case code:is_loaded(Mod) of
 				false ->
-					throw({error, not_available});
+               {module, _} = code:load_file(Mod),
+               {Mod, build_request_env(GEnv, Env)};
+					% throw({error, not_available});
 				_     ->
 					{Mod, build_request_env(GEnv, Env)}
 			end
@@ -302,11 +304,11 @@ build_request_env(GEnv,       Env) -> Env ++ GEnv.
 
 %%
 %% check if method is allowed
-is_method_allowed(Mthd, {_Uri, _Head, _Env}, Mod) ->
-	case erlang:function_exported(Mod, allowed_methods, 0) of
+is_method_allowed(Mthd, {_Uri, _Head, _Env}=Req, Mod) ->
+	case erlang:function_exported(Mod, allowed_methods, 1) of
 		%
 		true  ->
-			assert_allowed_method(Mthd, Mod:allowed_methods());
+			assert_allowed_method(Mthd, Mod:allowed_methods(Req));
 
 		% check is not implemented, by default only read methods are allowed
 		false ->
@@ -344,13 +346,13 @@ is_request_authorized(Mthd, {_Uri, _Head, _Env}=Req, Mod) ->
 
 %%
 %% check if resource exists
-is_content_supported(Mthd, {_Uri, Heads, _Env}, Mod) ->
+is_content_supported(Mthd, {_Uri, Heads, _Env}=Req, Mod) ->
 	case is_payload_method(Mthd) of
 		true  ->
-			assert_content_type([opts:val('Content-Type', Heads)], Mod:content_accepted());
+			assert_content_type([opts:val('Content-Type', Heads)], Mod:content_accepted(Req));
 			
 		false ->
-		   assert_content_type(opts:val('Accept', [{'*', '*'}], Heads), Mod:content_provided())
+		   assert_content_type(opts:val('Accept', [{'*', '*'}], Heads), Mod:content_provided(Req))
 	end.
 
 assert_content_type([], _B) ->

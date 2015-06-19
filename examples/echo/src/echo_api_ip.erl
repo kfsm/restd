@@ -1,22 +1,22 @@
 -module(echo_api_ip).
 
 -export([
-	allowed_methods/0,
-	content_provided/0, 
-   content_accepted/0,
+	allowed_methods/1,
+	content_provided/1, 
+   content_accepted/1,
    'GET'/2
 ]).
 
 %%
-allowed_methods() ->
+allowed_methods(_Req) ->
    ['GET'].
 
 %%
-content_provided() ->
+content_provided(_Req) ->
    [{application, json}, {text, plain}].
 
 %%
-content_accepted() ->
+content_accepted(_Req) ->
    [].
 
 %%
