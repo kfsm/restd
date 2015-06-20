@@ -20,6 +20,7 @@
 -export([behaviour_info/1]).
 -export([start/0]).
 -export([
+   start_link/2,
 	register/3,
 	register/4
 ]).
@@ -96,8 +97,8 @@ start() ->
 
 %%
 %% start service
-start_link(Uid, Opts) ->
-	restd_service_sup:start_link(Uid, Opts).
+start_link(Service, Opts) ->
+	restd_service_sup:start_link(Service, Opts).
 
 
 %%

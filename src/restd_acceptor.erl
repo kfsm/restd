@@ -35,13 +35,19 @@ start_link(Uid, Uri, Opts) ->
 	pipe:start_link(?MODULE, [Uid, Uri, Opts], []).
 
 init([Uid, Uri, Opts]) ->
-	{ok, _} = knet:bind(Uri, Opts),
-	{ok, 'ACCEPT', 
-		#fsm{
-			uid = Uid,
-			q   = deq:new()
-		}
-	}.
+   %% vhost acceptor do not need, underlying sockets 
+   case opts:val(vhost, undefined, Opts) of
+      undefined ->
+         {ok, _} = knet:bind(Uri, Opts);
+      _         ->
+         ok
+   end,
+   {ok, 'ACCEPT', 
+      #fsm{
+         uid = Uid,
+         q   = deq:new()
+      }
+   }.
 
 free(_Reason, _S) ->
 	ok.

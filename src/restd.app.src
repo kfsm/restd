@@ -2,15 +2,12 @@
    [
       {description, "rest api acceptor"},
       {vsn,         "0.3.0"},
-      {modules,     [
-         restd,
-         restd_sup,
-         restd_app
-      ]},
+      {modules,     []},
       {registered,  []},
       {applications,[
          kernel, 
          stdlib,
+         pipe,
          knet
       ]},
       {mod, {restd_app, []}},
