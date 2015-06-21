@@ -17,7 +17,6 @@
 -record(fsm, {
    vhost = undefined :: atom(),
    uid   = undefined :: atom(),
-   uri   = undefined :: atom(),
    so    = undefined :: atom(),
    pid   = undefined :: pid()
 }).
@@ -38,8 +37,7 @@ init([Service, Vhost, Uri, Opts]) ->
       #fsm{
          vhost = Vhost,
          uid   = Service,
-         uri   = Uri,
-         so    = Opts
+         so    = [Uri, [vhost|Opts]]
       }
    }.
 
@@ -63,17 +61,17 @@ free(_Reason, _State) ->
 
 %%
 %%
-'ACCEPT'({http, _, {_Mthd, _Uri, _Head, _Env}} = Req, Pipe, #fsm{vhost=vhost, uid=Service, uri=Uri, so=SOpt}=State) ->
+'ACCEPT'({http, _, {_Mthd, _Uri, _Head, _Env}} = Req, Pipe, #fsm{vhost=vhost, uid=Service, so=SOpt}=State) ->
    {ok, Pid} = pipe:call(
       {Service, erlang:node(pg2:get_closest_pid(Service))}, 
-      {accept,  [Uri, [vhost|SOpt]]}
+      {accept,  SOpt]}
    ),
    'STREAM'(Req, Pipe, State#fsm{pid = Pid});
 
-'ACCEPT'({http, _, {_Mthd, Uri, _Head, _Env}} = Req, Pipe, #fsm{vhost=Mod, uid=Service, uri=Uri, so=SOpt}=State) ->
+'ACCEPT'({http, _, {_Mthd, Uri, _Head, _Env}} = Req, Pipe, #fsm{vhost=Mod, uid=Service, so=SOpt}=State) ->
    {ok, Pid} = pipe:call(
       {Service, Mod:whereis(Uri)}, 
-      {accept,  [Uri, [vhost|SOpt]]}
+      {accept,  SOpt]}
    ),
    'STREAM'(Req, Pipe, State#fsm{pid = Pid});
    
