@@ -15,6 +15,9 @@
 %%   See the License for the specific language governing permissions and
 %%   limitations under the License.
 %%
+%% @todo
+%%   * abstract routing table
+%%   * clean-up acceptor fsm
 -module(restd).
 
 -export([behaviour_info/1]).

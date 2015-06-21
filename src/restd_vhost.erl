@@ -64,14 +64,14 @@ free(_Reason, _State) ->
 'ACCEPT'({http, _, {_Mthd, _Uri, _Head, _Env}} = Req, Pipe, #fsm{vhost=vhost, uid=Service, so=SOpt}=State) ->
    {ok, Pid} = pipe:call(
       {Service, erlang:node(pg2:get_closest_pid(Service))}, 
-      {accept,  SOpt]}
+      {accept,  SOpt}
    ),
    'STREAM'(Req, Pipe, State#fsm{pid = Pid});
 
 'ACCEPT'({http, _, {_Mthd, Uri, _Head, _Env}} = Req, Pipe, #fsm{vhost=Mod, uid=Service, so=SOpt}=State) ->
    {ok, Pid} = pipe:call(
       {Service, Mod:whereis(Uri)}, 
-      {accept,  SOpt]}
+      {accept,  SOpt}
    ),
    'STREAM'(Req, Pipe, State#fsm{pid = Pid});
    
