@@ -1,6 +1,6 @@
 %%
-%%   Copyright (c) 2012 - 2013, Dmitry Kolesnikov
-%%   Copyright (c) 2012 - 2013, Mario Cardona
+%%   Copyright (c) 2012 - 2015, Dmitry Kolesnikov
+%%   Copyright (c) 2012 - 2015, Mario Cardona
 %%   All Rights Reserved.
 %%
 %%   Licensed under the Apache License, Version 2.0 (the "License");
