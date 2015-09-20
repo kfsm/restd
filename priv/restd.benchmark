@@ -1,15 +1,14 @@
 {code_paths,      [
 	"./ebin" 
-  ,"./deps/feta"
-  ,"./deps/kfsm"
-  ,"./deps/plib"
-  ,"./deps/pipe"
-  ,"./deps/knet"
-  ,"./deps/pns"
-  ,"./deps/jsx"
-  ,"./deps/htstream"
   ,"./deps/datum"
+  ,"./deps/feta"
+  ,"./deps/goldrush"
+  ,"./deps/htstream"
+  ,"./deps/jsx"
+  ,"./deps/knet"
   ,"./deps/lager"
+  ,"./deps/pipe"
+  ,"./deps/pns"
 ]}.
 {log_level,       info}.
 {report_interval, 1}.
@@ -24,8 +23,7 @@
 {value_generator, {fixed_bin, 1000}}.
 
 {operations, [
-   {put,    5} 
-  ,{get,    5}
+   {run,    1} 
 ]}.
 
 {url,   "http://localhost:8080/ip"}.

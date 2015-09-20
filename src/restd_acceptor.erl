@@ -35,13 +35,7 @@ start_link(Uid, Uri, Opts) ->
 	pipe:start_link(?MODULE, [Uid, Uri, Opts], []).
 
 init([Uid, Uri, Opts]) ->
-   %% vhost acceptor do not need, underlying sockets 
-   case opts:val(vhost, undefined, Opts) of
-      undefined ->
-         {ok, _} = knet:bind(Uri, Opts);
-      _         ->
-         ok
-   end,
+   knet:bind(Uri, Opts),
    {ok, 'ACCEPT', 
       #fsm{
          uid = Uid,
@@ -63,8 +57,8 @@ ioctl(_, _) ->
 %%%
 %%%------------------------------------------------------------------   
 
-'LISTEN'(_, _, S) ->
-	{next_state, 'LISTEN', S}.
+'LISTEN'(_, _, State) ->
+	{next_state, 'LISTEN', State}.
 
 %%%------------------------------------------------------------------
 %%%

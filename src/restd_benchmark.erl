@@ -26,40 +26,39 @@
 
 %%
 %%
-new(_Id) ->
-	_ = knet:start(),
-
- 	lager:set_loglevel(lager_console_backend, basho_bench_config:get(log_level, info)),
+new(1) ->
+   knet:start(),
+   lager:set_loglevel(lager_console_backend, basho_bench_config:get(log_level, info)),
    Url = uri:new(basho_bench_config:get(url, "http://localhost:8080")),
-
-   %%{ok, Sock} = knet:socket(uri:get(schema, Url), []),
-   %%{ok, {Sock, Url}}.
+   {ok, Url};
+new(_) ->
+   Url = uri:new(basho_bench_config:get(url, "http://localhost:8080")),
    {ok, Url}.
 
 %%
 %%
-%run(_, _KeyGen, _ValGen, {Sock, Url}=S) ->
 run(_, _KeyGen, _ValGen, Url) ->
-   {ok, Sock} = knet:socket(uri:get(schema, Url), []),
-
+   Sock = knet:socket(Url, []),
+   {ioctl,b, _} = pipe:recv(Sock, 5000, []),
 	pipe:send(Sock, {'GET', Url, [
 		{'Connection', 'close'}, 
 		{'Accept',     [{'*', '*'}]}, 
-		{'Host',       uri:get(authority, Url)}
+		{'Host',       uri:authority(Url)}
 	]}),
-	200 = http_wait(undefined),
+	200 = http_wait(Sock, undefined),
 	knet:close(Sock),
+   '$free' = pipe:recv(Sock, 5000, []),
    {ok, Url}.
 
 
-http_wait(X) ->
-	case pipe:recv(5000) of
-		{http, _, {Code, _, _}} ->
-			http_wait(Code);
+http_wait(Sock, X) ->
+	case pipe:recv(Sock, 5000, []) of
+		{http, _, {Code, _Text, _Head, _Env}} ->
+			http_wait(Sock, Code);
 		{http, _, eof} ->
 			X;
 		_ ->
-			http_wait(X)
+			http_wait(Sock, X)
 	end.
 
 

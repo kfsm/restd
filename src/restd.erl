@@ -17,7 +17,7 @@
 %%
 %% @todo
 %%   * abstract routing table
-%%   * clean-up acceptor fsm
+%%   * clean-up acceptor
 -module(restd).
 
 -export([behaviour_info/1]).
