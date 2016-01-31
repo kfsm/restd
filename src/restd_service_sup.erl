@@ -32,12 +32,11 @@
 %%
 %%
 start_link(Service, Opts) ->
-   listen(opts:val(uri, undefined, Opts), Service, Opts),
-   lists:foreach(
-		fun(X) -> config(Service, X) end,
-		opts:val(mod, [], Opts)
-	),
-	supervisor:start_link(?MODULE, []).
+   Port  = opts:val(port, Opts),
+   Route = opts:val(route, Opts),
+   {module, _} = restd:routes(Service, Route),
+   listen(Port, Service, Opts),
+   supervisor:start_link(?MODULE, []).
    
 init([]) -> 
    {ok,
@@ -49,14 +48,6 @@ init([]) ->
 
 %%
 %%
-config(Service, {Uri, Mod}) ->
-   restd:register(Service, Uri, Mod);
-
-config(Service, {Uri, Mod, Env}) ->
-   restd:register(Service, Uri, Mod, Env).
-
-%%
-%% 
 listen(Uri, Service, Opts) ->
    Sock = opts:val(sock, [], Opts),
    knet:listen(Uri, [

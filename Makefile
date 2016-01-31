@@ -32,7 +32,7 @@ USER =
 PASS =
 
 ## root path to benchmark framework
-BB     = ../basho_bench
+BB     = ../../dev/basho_bench
 SSHENV = /tmp/ssh-agent.conf
 ADDR   = $(shell ifconfig ${NET} | sed -En 's/.*inet (addr:)?(([0-9]*\.){3}[0-9]*).*/\2/p')
 BRANCH = $(shell git symbolic-ref --short -q HEAD)

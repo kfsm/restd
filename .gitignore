@@ -10,4 +10,6 @@ ebin/
 deps/
 log/
 rebar
+.rebar/
+tests/
 *.sublime-*

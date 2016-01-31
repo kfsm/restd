@@ -286,38 +286,11 @@ validate_request({Mthd, Uri, Heads, Env}, Service) ->
 %%
 %% check if resource available (resource handler is registered)
 is_resource_available(_Mthd, {Uri, _Head, _Env}, Service) ->
-	Resources = ets:lookup(restd, Service),
-	case list_available_resources(Uri, Resources) of
-		%% not available
-		[]    -> 
-			throw({error, not_available});
-		%% available
-		Match ->
-			{_, Env, Mod, GEnv} = hd(Match),
-			case code:is_loaded(Mod) of
-				false ->
-               {module, _} = code:load_file(Mod),
-               {Mod, build_request_env(GEnv, Env)};
-					% throw({error, not_available});
-				_     ->
-					{Mod, build_request_env(GEnv, Env)}
-			end
-	end.
-
-list_available_resources(Uri, Resources) ->
-	Match = [{length(uri:segments(TUri)), uri:match(Uri, TUri), Mod, Env} || {_, TUri, Mod, Env} <- Resources],
-	lists:sort(
-		fun({A, _, _, _}, {B, _, _, _}) -> A >= B end,
-		lists:filter(
-			fun({_, X, _, _}) -> X =/= false end,
-			Match
-		)
-	).
-
-build_request_env(undefined, true) -> [];
-build_request_env(undefined,  Env) -> Env;
-build_request_env(GEnv,      true) -> GEnv;
-build_request_env(GEnv,       Env) -> Env ++ GEnv.
+   try
+      hornlog:q(Service, uri:segments(Uri), Uri)
+   catch _:_ ->
+      throw({error, not_available})
+   end.
 
 %%
 %% check if method is allowed

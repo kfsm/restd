@@ -22,10 +22,10 @@
 
 -export([behaviour_info/1]).
 -export([start/0]).
+-export([start_link/2]).
 -export([
-   start_link/2,
-	register/3,
-	register/4
+   routes/2,
+   return/4
 ]).
 
 
@@ -100,18 +100,52 @@ start() ->
 
 %%
 %% start service
+-spec start_link(atom(), [_]) -> {ok, pid()} | {error, any()}.
+
 start_link(Service, Opts) ->
 	restd_service_sup:start_link(Service, Opts).
 
-
 %%
-%% register resource
--spec(register/3 :: (atom(), list() | binary(), atom()) -> ok).
--spec(register/4 :: (atom(), list() | binary(), atom(), any()) -> ok).
+%% compile routing table
+-spec routes(atom(), [_]) -> {module, atom()}.
 
-register(Service, Uri, Mod) ->
-	register(Service, Uri, Mod, undefined).
+routes(Id, Routes) ->
+   hornlog:c(Id, 
+      [route(X) || X <- Routes]).
 
-register(Service, Uri, Mod, Env) ->
-	true = ets:insert(restd, {Service, uri:template(Uri), Mod, Env}),
-	ok.
+%% compile route to hornlog rule
+route({Path, Resource, Env}) ->
+   Pattern = uri:segments( uri:new(Path) ),
+   hornlog:rule(
+      hornlog:head(fun restd:return/4, [Pattern, Resource, Env]), 
+      lists:map(fun pattern/1 , Pattern)
+   );
+route({Route, Resource}) ->
+   route({Route, Resource, []}).
+
+%% build uri pattern matcher
+pattern(<<$:, _/binary>>) ->
+   '_';
+pattern(X) ->
+   X.
+
+%% return matched result
+return(Pattern, Resource, Env, Uri) ->
+   Lenv = lists:map(
+      fun({<<$:, Key/binary>>, Val}) ->
+         {Key, Val}
+      end,
+      lists:filter(
+         fun({<<$:, _/binary>>, _}) -> true; (_) -> false end,
+         lists:zip(Pattern, uri:segments(Uri))
+      )
+   ),
+   {Resource, Lenv ++ Env}.
+
+   
+%%%----------------------------------------------------------------------------   
+%%%
+%%% private
+%%%
+%%%----------------------------------------------------------------------------   
+
