@@ -115,6 +115,7 @@ routes(Id, Routes) ->
 
 %% compile route to hornlog rule
 route({Path, Resource, Env}) ->
+   {module, _} = code:load_file(Resource),
    Pattern = uri:segments( uri:new(Path) ),
    hornlog:rule(
       hornlog:head(fun restd:return/4, [Pattern, Resource, Env]), 

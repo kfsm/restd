@@ -60,7 +60,7 @@ init([Uid, Uri, Opts]) ->
       }
    }.
 
-free(_Reason, _S) ->
+free(_Reason, _State) ->
 	ok.
 
 %%
