@@ -115,7 +115,11 @@ routes(Id, Routes) ->
 
 %% compile route to hornlog rule
 route({Path, Resource, Env}) ->
-   {module, _} = code:load_file(Resource),
+   %%
+   %% the load of resource is required for any other deployment configuration
+   %% except OTP releases. Not Available error is returned if code is not loaded. 
+   %% The restd do the best effort to load the module but ignores any possible errors
+   code:load_file(Resource),
    Pattern = uri:segments( uri:new(Path) ),
    hornlog:rule(
       hornlog:head(fun restd:return/4, [Pattern, Resource, Env]), 
