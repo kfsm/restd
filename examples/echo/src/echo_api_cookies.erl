@@ -4,7 +4,7 @@
 	allowed_methods/1,
 	content_provided/1, 
    content_accepted/1,
-   'GET'/2
+   'GET'/3
 ]).
 
 %%
@@ -20,7 +20,7 @@ content_accepted(_Req) ->
    [].
 
 %%
-'GET'(_, {Uri, Heads, _Env}) ->
+'GET'(_, {Uri, Heads, _Env}, _) ->
 	case uri:get(segments, Uri) of
 		[<<"cookies">>] ->
 			% TODO: parse Cookie header
@@ -32,11 +32,11 @@ content_accepted(_Req) ->
 		[<<"cookies">>, <<"set">>] ->
 			H = [{'Set-Cookie', <<(scalar:s(K))/binary, $=, (scalar:s(V))/binary, $;, "Path=/">>} || {K, V} <- uri:q(Uri)],
 			U = uri:set(path, <<"/cookies">>, Uri),
-			{302, [{'Location', uri:to_binary(U)} | H], <<>>};
+			{302, [{'Location', uri:s(U)} | H], <<>>};
 		[<<"cookies">>, <<"delete">>] ->
 			H = [{'Set-Cookie', <<(scalar:s(K))/binary, $=, $;, "expires=Thu, 01-Jan-1970 00:00:00 GMT; Max-Age=0; Path=/">>} || K <- uri:q(Uri)],
 			U = uri:set(path, <<"/cookies">>, Uri),
-			{302, [{'Location', uri:to_binary(U)} | H], <<>>}
+			{302, [{'Location', uri:s(U)} | H], <<>>}
 	end.
 
 

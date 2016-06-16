@@ -20,10 +20,14 @@
 -module(restd_api_webapp).
 
 -export([
+   allowed_methods/1,
 	content_provided/1, 
 	exists/2,
-   'GET'/2
+   'GET'/3
 ]).
+
+allowed_methods(_Req) ->
+   ['GET'].
 
 %%
 %%
@@ -37,7 +41,7 @@ exists(_, {Url, _Heads, Env}) ->
 
 %%
 %%
-'GET'(_, {Url, _Heads, Env}) ->
+'GET'(_, {Url, _Heads, Env}, _) ->
 	Filename   = filename(Url, Env),
 	{ok, File} = file:read_file(Filename),
 	{ok, 

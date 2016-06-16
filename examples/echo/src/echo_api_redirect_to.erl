@@ -4,7 +4,7 @@
 	allowed_methods/1,
 	content_provided/1, 
    content_accepted/1,
-   'GET'/2
+   'GET'/3
 ]).
 
 %%
@@ -20,6 +20,6 @@ content_accepted(_Req) ->
    [].
 
 %%
-'GET'(_, {Url, _Heads, _Env}) ->
+'GET'(_, {Url, _Heads, _Env}, _) ->
 	{302, [{'Location', uri:q(url, <<>>, Url)}], <<>>}.
 

@@ -4,7 +4,7 @@
 	allowed_methods/1,
 	content_provided/1, 
    content_accepted/1,
-   'GET'/2
+   'GET'/3
 ]).
 
 %%
@@ -20,7 +20,7 @@ content_accepted(_Req) ->
    [].
 
 %%
-'GET'(_, {Url, _Heads, Env}) ->
+'GET'(_, {Url, _Heads, Env}, _) ->
 	case opts:val(<<"n">>, Env) of
 		<<"1">> ->
 			U = uri:set(path, <<"/get">>, Url),

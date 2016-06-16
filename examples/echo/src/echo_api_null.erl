@@ -4,7 +4,7 @@
    allowed_methods/1,
    content_provided/1, 
    content_accepted/1,
-   'GET'/2,
+   'GET'/3,
    'POST'/3
 ]).
 
@@ -21,7 +21,7 @@ content_accepted(_Req) ->
    [].
 
 %%
-'GET'(_, {Url, Heads, Env}) ->
+'GET'(_, {Url, Heads, Env}, _) ->
    error_logger:error_report([{url, uri:s(Url)}] ++ Heads ++ Env),
    {ok, <<>>}.   
 

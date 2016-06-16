@@ -4,7 +4,7 @@
 	allowed_methods/1,
 	content_provided/1, 
    content_accepted/1,
-   'GET'/2
+   'GET'/3
 ]).
 
 %%
@@ -20,7 +20,7 @@ content_accepted(_Req) ->
    [].
 
 %%
-'GET'(_, {Url, Heads, Env}) ->
+'GET'(_, {Url, Heads, Env}, _) ->
 	{_, Peer}  = lists:keyfind(peer, 1, Env),
 	H = [header(X) || X <- Heads],
 	{ok, 

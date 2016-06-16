@@ -85,42 +85,26 @@ ioctl(_, _) ->
 
 %%
 %%
-'ACCEPT'({http, _, {Mthd, _Uri, _Head, _Env}=Req0}, Pipe, S) ->
-	try
-		{Mod, Type, Req} = validate_request(Req0, S#fsm.uid),
-		case is_payload_method(Mthd) of
-			%% stream payload in
-			true  ->
-   			{next_state, 'HANDLE',
-      			S#fsm{
-      				method   = Mthd,
-         			resource = Mod,
-         			request  = Req,
-         			content  = Type,
-         			q        = deq:new()
-      			}
-   			};
+'ACCEPT'({http, _, {Mthd, Uri, Head, Env}}, Pipe, #fsm{uid = Service} = State) ->
+   case prerouting({Service, Mthd, Uri, Head, Env}) of
+      {ok,   Request} ->
+         {next_state, 'HANDLE', State#fsm{request = Request, q = deq:new()}};
 
-			false ->
-				case handle_response(Mod:Mthd(Type, Req), Type) of
-					%% no-payload, streaming
-					{_Code, _Heads} = Http ->
-		 				_ = pipe:a(Pipe, Http),
- 						{next_state, 'STREAM', S#fsm{resource=Mod, request = Req, content=Type}};
- 					%% there is a payload
- 					{_Code, _Heads, _Msg} = Http ->
-		 				_ = pipe:a(Pipe, Http),
- 						{next_state, 'ACCEPT', S}
- 				end
-		end
-	catch _:Reason ->
-		lager:notice("restd request error ~p: ~p", [Reason, erlang:get_stacktrace()]),
-		pipe:a(Pipe, handle_failure(Reason)),
-		{next_state, 'ACCEPT', S}
-	end;
+      {error, Reason} ->
+         pipe:a(Pipe, failure(Reason)),
+         {next_state, 'ACCEPT', State}
+   end;
 
-'ACCEPT'(_, _, S) ->
-	{next_state, 'ACCEPT', S}.
+%%
+%% @todo: ACCEPT
+%% handle({ws, _Sock, {_Mthd, _Url, _Head, _Env}}, _Pipe, State)
+%% handle({ws, _Sock, {terminated, _Reason}}, _Pipe, State)
+%% handle({ws, _Sock, Msg}, Pipe, State)
+%% 
+%% {http,<0.135.0>,eof}
+
+'ACCEPT'(_, _, State) ->
+	{next_state, 'ACCEPT', State}.
 
 %%%------------------------------------------------------------------
 %%%
@@ -128,22 +112,22 @@ ioctl(_, _) ->
 %%%
 %%%------------------------------------------------------------------   
 
-'HANDLE'({http, _Uri, Msg}, _Pipe, S)
- when is_binary(Msg) ->
+'HANDLE'({http, _Uri, Pckt}, _Pipe, State)
+ when is_binary(Pckt) ->
    {next_state, 'HANDLE', 
-   	S#fsm{
-   		q = deq:enq(Msg, S#fsm.q)
+   	State#fsm{
+   		q = deq:enq(Pckt, State#fsm.q)
    	}
    }; 
 
-'HANDLE'({http, _Uri, eof}, Pipe, #fsm{method=Mthd, resource=Mod, request=Req, content=Type}=S) ->
+'HANDLE'({http, _Uri, eof}, Pipe, #fsm{request = Req, q = Q} = State) ->
    try
-   	Msg  = erlang:iolist_to_binary(deq:list(S#fsm.q)),
-		case handle_response(Mod:Mthd(Type, Req, Msg), Type) of
+      {Type, Response} = routing(Req, deq:list(Q)),
+		case handle_response(Response, Type) of
 			%% no-payload, streaming
 			{_Code, _Heads} = Http ->
  				_ = pipe:a(Pipe, Http),
-				{next_state, 'STREAM', S#fsm{q = deq:new()}};
+				{next_state, 'STREAM', State#fsm{q = deq:new()}};
          %% there is a payload (lazy stream)
          {Code, Heads, {s, _, _}=Stream} ->
             _ = pipe:a(Pipe, {Code, Heads}),
@@ -152,16 +136,16 @@ ioctl(_, _) ->
                Stream
             ),
             pipe:a(Pipe, <<>>),
-            {next_state, 'ACCEPT', S#fsm{q = deq:new()}};
+            {next_state, 'ACCEPT', State#fsm{q = deq:new()}};
 			%% there is a payload
 			{_Code, _Heads, _Msg} = Http ->
  				_ = pipe:a(Pipe, Http),
-				{next_state, 'ACCEPT', S#fsm{q = deq:new()}}
+				{next_state, 'ACCEPT', State#fsm{q = deq:new()}}
 		end
    catch _:Reason ->
    	lager:notice("restd request error ~p: ~p", [Reason, erlang:get_stacktrace()]),
    	pipe:a(Pipe, handle_failure(Reason)),
-		{next_state, 'ACCEPT', S}
+		{next_state, 'ACCEPT', State}
    end.
 
 %%%------------------------------------------------------------------
@@ -271,158 +255,202 @@ handle_failure(Reason) ->
 %%%------------------------------------------------------------------   
 
 %%
-%% validate resource request and return request environment
-validate_request({Mthd, Uri, Heads, Env}, Service) ->
-	{Mod, GEnv} = is_resource_available(Mthd, {Uri, Heads, Env}, Service),
-	Req = {Uri, Heads, GEnv ++ Env}, 
-	_   = is_method_allowed(Mthd, Req, Mod),
-	_   = is_request_authorized(Mthd, Req, Mod),
-	Type= is_content_supported(Mthd, Req, Mod),
-	%% @todo accept- langauge, charset, encoding 
-   _   = is_resource_exists(Mthd, Type, Req, Mod),  
-   {Mod, Type, Req}.
+%% request pre-routing
+prerouting(Request) ->
+   do(Request, [
+      fun is_resource_available/1,
+      fun is_method_allowed/1,
+      fun is_access_authorized/1,
+      fun is_content_supported/1,
+      fun is_content_acceptable/1,
+      fun is_resource_exists/1
+   ]).
+
+%%
+%% request routing
+routing({Mod, Mthd, Url, Head, Env}, Pckt) -> 
+   {_, Accept} = lists:keyfind('Accept', 1, Env),
+   Content  = erlang:iolist_to_binary(Pckt),
+   {Accept, Mod:Mthd(Accept, {Url, Head, Env}, Content)}.
+
+
+%%
+%% request failure
+failure(Reason) ->
+   lager:notice("[restd] request failed: ~p", [Reason]),
+   handle_failure({error, Reason}).
 
 
 %%
 %% check if resource available (resource handler is registered)
-is_resource_available(_Mthd, {Uri, _Head, _Env}, Service) ->
+is_resource_available({Service, Mthd, Url, Head, LEnv}) ->
    try
-      hornlog:q(Service, uri:segments(Uri), Uri)
+      {Mod, GEnv} = hornlog:q(Service, uri:segments(Url), Url),
+      {ok, {Mod, Mthd, Url, Head, LEnv ++ GEnv}}
    catch _:_ ->
-      throw({error, not_available})
+      {error, not_available}
    end.
 
 %%
 %% check if method is allowed
-is_method_allowed(Mthd, {_Uri, _Head, _Env}=Req, Mod) ->
-	case erlang:function_exported(Mod, allowed_methods, 1) of
-		%
-		true  ->
-			assert_allowed_method(Mthd, Mod:allowed_methods(Req));
-
-		% check is not implemented, by default only read methods are allowed
-		false ->
-			assert_allowed_method(Mthd, ['GET', 'HEAD', 'OPTIONS', 'TRACE'])
-	end.
-
-assert_allowed_method(_Mthd, ['*']) ->
-   true;
-
-assert_allowed_method(Mthd, Allowed) ->
-   case lists:member(Mthd, Allowed) of
-      false -> 
-      	throw({error, not_allowed});
-      true  -> 
-      	ok
+is_method_allowed({Mod, Mthd, Url, Head, Env} = Req) ->
+   try
+      List = Mod:allowed_methods({Url, Head, Env}), 
+      case lists:member(Mthd, List) of
+         false -> 
+            {error, not_allowed};
+         true  -> 
+            {ok, Req}
+      end
+   catch _:_ ->
+      {error, not_implemented}
    end.
 
 %%
 %% check if request is authorized
-is_request_authorized(Mthd, {_Uri, _Head, _Env}=Req, Mod) ->
-	case erlang:function_exported(Mod, authorize, 2) of
-		%
-		true  ->
-			case Mod:authorize(Mthd, Req) of
-				ok ->
-					ok;
-				_  ->
-					throw({error, unauthorized})
-			end;
+is_access_authorized({Mod, Mthd, Url, Head, Env} = Req) ->
+   case erlang:function_exported(Mod, authorize, 2) of
+      %
+      true  ->
+         case Mod:authorize(Mthd, {Url, Head, Env}) of
+            ok ->
+               {ok, Req};
+            _  ->
+               {error, unauthorized}
+         end;
 
-		% check is not implemented, request is authorized by default
-		false ->
-			ok
-	end.
+      % check is not implemented, request is authorized by default
+      false ->
+         {ok, Req}
+   end.
 
 %%
 %% check if resource exists
-is_content_supported(Mthd, {_Uri, Heads, _Env}=Req, Mod) ->
-	case is_payload_method(Mthd) of
-		true  ->
-			assert_content_type([opts:val('Content-Type', Heads)], Mod:content_accepted(Req));
-			
-		false ->
-		   assert_content_type(opts:val('Accept', [{'*', '*'}], Heads), Mod:content_provided(Req))
-	end.
+is_content_supported({Mod, Mthd, Url, Head, Env} = Req) ->
+   case opts:val('Content-Type', undefined, Head) of
+      % content type is not defined
+      undefined ->
+         {ok, Req};
 
-assert_content_type([], _B) ->
-	throw({error, not_acceptable});
+      % content type is defined by request 
+      {Major, Minor} ->
+         try
+            Content = Mod:content_accepted({Url, Head, Env}),
+            MajorLs = lists:filter(fun({X, _}) -> scalar:s(X) =:= Major orelse X =:= '*' end, Content),
+            MinorLs = lists:filter(fun({_, X}) -> scalar:s(X) =:= Minor orelse X =:= '*' end, MajorLs),
+            {ok, {Mod, Mthd, Url, Head, [{'Content-Type', hd(MinorLs)}|Env]}}
+         catch _:_ ->
+            {error, not_acceptable}
+         end
+   end.
 
-assert_content_type([H | T], B) ->
-	case assert_content_type(H, B) of
-		false -> assert_content_type(T, B);
-		Type  -> Type
-	end;
-assert_content_type(A, B) ->
-	Req = tuple_to_list(A),
-	case lists:filter(fun(X) -> is_equiv(Req, tuple_to_list(X)) end, B) of
-		[]   -> false;
-		List -> hd(List)
-	end.
+%%
+%% check if content is accepted by remote entity
+is_content_acceptable({Mod, Mthd, Url, Head, Env}) ->
+   try
+      Content = Mod:content_provided({Url, Head, Env}),
+      Accept  = lists:flatten(
+         lists:map(
+            fun({Major, Minor}) ->
+               MajorLs = lists:filter(fun({X, _}) -> scalar:s(X) =:= Major orelse X =:= '*' orelse Major =:= '*' end, Content),
+               lists:filter(fun({_, X}) -> scalar:s(X) =:= Minor orelse X =:= '*' orelse Minor =:= '*' end, MajorLs)
+            end,
+            opts:val('Accept', [{'*', '*'}], Head)
+         )
+      ),
+      {ok, {Mod, Mthd, Url, Head, [{'Accept', hd(Accept)}|Env]}}
+   catch _:_ ->
+      {error, not_acceptable}
+   end.
 
 %%
 %% check if request is authorized
 %% @todo: there is diff semantic for put / post vs get
-is_resource_exists(_Mthd, Type, {_Uri, _Head, _Env}=Req, Mod) ->
-	case erlang:function_exported(Mod, exists, 2) of
-		%
-		true  ->
-			case Mod:exists(Type, Req) of
-				true ->
-					ok;
-				_  ->
-					throw({error, not_found})
-			end;
+is_resource_exists({Mod, _Mthd, Url, Head, Env} = Req) -> 
+   case erlang:function_exported(Mod, exists, 2) of
+      %
+      true  ->
+         {_, Accept} = lists:keyfind('Accept', 1, Env),
+         case Mod:exists(Accept, {Url, Head, Env}) of
+            true ->
+               {ok, Req};
+            _  ->
+               {error, not_found}
+         end;
 
-		% check is not implemented, request is authorized by default
-		false ->
-			ok
-	end.
-
-
-
-
-
-%% check if two uri segments equivalent
-is_equiv(['*'], _) ->
-	true;
-is_equiv(_, ['*']) ->
-	true;
-is_equiv([H|A], [_|B])
- when H =:= '_' orelse H =:= '*' ->
-	is_equiv(A, B);
-is_equiv([_|A], [H|B])
- when H =:= '_' orelse H =:= '*' ->
-	is_equiv(A, B);
-is_equiv([A|AA], [B|BB]) ->
-	case eq(A, B) of
-		true  -> is_equiv(AA, BB);
-		false -> false
-	end;
-is_equiv([], []) ->
- 	true;
-is_equiv(_,   _) ->
- 	false.
-
-%% check if two path elements are equal
-eq(A, B)
- when is_atom(A), is_binary(B) ->
- 	atom_to_binary(A, utf8) =:= B;
-eq(A, B)
- when is_binary(A), is_atom(B) ->
- 	A =:= atom_to_binary(B, utf8);
-eq(A, B) ->
-	A =:= B.
-
+      % check is not implemented, resource exists by default
+      false ->
+         {ok, Req}
+   end.
 
 %%
-%% check is http method carries any payload
-is_payload_method('GET')     -> false;
-is_payload_method('HEAD')    -> false;
-is_payload_method('OPTIONS') -> false;
-is_payload_method('TRACE')   -> false;
-is_payload_method('DELETE')  -> false;
-is_payload_method(_)         -> true.
+%% error monad function binding 
+%% fun(Request) -> Request.
+do(X, [H | T]) ->
+   case H(X) of
+      {error, _} = Error ->
+         Error;
+      {ok, Y} ->
+         do(Y, T)
+   end;
+do(X, []) ->
+   {ok, X}.
+
+
+% %%
+% %% validate resource request and return request environment
+% validate_request({Mthd, Uri, Heads, Env}, Service) ->
+% 	{Mod, GEnv} = is_resource_available(Mthd, {Uri, Heads, Env}, Service),
+% 	Req = {Uri, Heads, GEnv ++ Env}, 
+% 	_   = is_method_allowed(Mthd, Req, Mod),
+% 	_   = is_request_authorized(Mthd, Req, Mod),
+% 	Type= is_content_supported(Mthd, Req, Mod),
+% 	%% @todo accept- langauge, charset, encoding 
+%    _   = is_resource_exists(Mthd, Type, Req, Mod),  
+%    {Mod, Type, Req}.
+
+
+
+% %% check if two uri segments equivalent
+% is_equiv(['*'], _) ->
+% 	true;
+% is_equiv(_, ['*']) ->
+% 	true;
+% is_equiv([H|A], [_|B])
+%  when H =:= '_' orelse H =:= '*' ->
+% 	is_equiv(A, B);
+% is_equiv([_|A], [H|B])
+%  when H =:= '_' orelse H =:= '*' ->
+% 	is_equiv(A, B);
+% is_equiv([A|AA], [B|BB]) ->
+% 	case eq(A, B) of
+% 		true  -> is_equiv(AA, BB);
+% 		false -> false
+% 	end;
+% is_equiv([], []) ->
+%  	true;
+% is_equiv(_,   _) ->
+%  	false.
+
+% %% check if two path elements are equal
+% eq(A, B)
+%  when is_atom(A), is_binary(B) ->
+%  	atom_to_binary(A, utf8) =:= B;
+% eq(A, B)
+%  when is_binary(A), is_atom(B) ->
+%  	A =:= atom_to_binary(B, utf8);
+% eq(A, B) ->
+% 	A =:= B.
+
+
+% %%
+% %% check is http method carries any payload
+% is_payload_method('GET')     -> false;
+% is_payload_method('HEAD')    -> false;
+% is_payload_method('OPTIONS') -> false;
+% is_payload_method('TRACE')   -> false;
+% is_payload_method('DELETE')  -> false;
+% is_payload_method(_)         -> true.
 
 
 
