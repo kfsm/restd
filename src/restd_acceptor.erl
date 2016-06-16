@@ -28,7 +28,8 @@
 	'LISTEN'/3,
 	'ACCEPT'/3,
 	'HANDLE'/3,
-	'STREAM'/3
+	'STREAM'/3,
+   'WEBSOCK'/3
 ]).
 
 %% default state
@@ -89,6 +90,16 @@ ioctl(_, _) ->
    case prerouting({Service, Mthd, Uri, Head, Env}) of
       {ok,   Request} ->
          {next_state, 'HANDLE', State#fsm{request = Request, q = deq:new()}};
+
+      {error, Reason} ->
+         pipe:a(Pipe, failure(Reason)),
+         {next_state, 'ACCEPT', State}
+   end;
+
+'ACCEPT'({ws, _, {Mthd, Uri, Head, Env}}, Pipe, #fsm{uid = Service} = State) ->
+   case prerouting({Service, Mthd, Uri, Head, Env}) of
+      {ok,   Request} ->
+         {next_state, 'WEBSOCK', State#fsm{request = Request, q = deq:new()}};
 
       {error, Reason} ->
          pipe:a(Pipe, failure(Reason)),
@@ -186,6 +197,58 @@ pipe_sink(Pipe) ->
 		undefined -> pipe:a(Pipe);
 		Pid       -> Pid
 	end.
+
+%%%------------------------------------------------------------------
+%%%
+%%% WebSock
+%%%
+%%%------------------------------------------------------------------   
+
+'WEBSOCK'({ws, _, {terminated, _}}, _Pipe, State) ->
+   {stop, normal, State};
+
+'WEBSOCK'({ws, _, Msg}, Pipe, #fsm{request = Req} = State) ->
+   try
+      case routing(Req, [Msg]) of
+         {_, ok} ->
+            {next_state, 'WEBSOCK', State};
+
+         {_, {ok, Http}} ->
+            _ = pipe:a(Pipe, Http),
+            {next_state, 'WEBSOCK', State}
+      end
+   catch _:Reason ->
+      lager:notice("restd request error ~p: ~p", [Reason, erlang:get_stacktrace()]),
+      pipe:a(Pipe, handle_failure(Reason)),
+      {stop, normal, State}
+   end;
+
+'WEBSOCK'(Msg, Pipe, #fsm{request = Req} = State) ->
+   try
+      {Mod, _Mthd, Url, Head, Env} = Req,
+      {_, Accept} = lists:keyfind('Accept', 1, Env),
+      case Mod:stream(Accept, {Url, Head, Env}, pipe:a(Pipe), Msg) of
+         eof  -> 
+            {stop, normal,  State};
+         undefined ->
+            {next_state, 'WEBSOCK', State};
+         Http -> 
+            pipe:send(pipe_sink(Pipe), Http),
+            {next_state, 'WEBSOCK', State}
+      end
+   catch _:Reason ->
+      lager:notice("restd request error ~p: ~p", [Reason, erlang:get_stacktrace()]),
+      pipe:send(pipe_sink(Pipe), handle_failure(Reason)),
+      {next_state, 'WEBSOCK', State}
+   end.
+
+
+
+%%%------------------------------------------------------------------
+%%%
+%%% private
+%%%
+%%%------------------------------------------------------------------   
 
 
 %%
