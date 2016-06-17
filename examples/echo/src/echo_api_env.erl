@@ -20,7 +20,7 @@ content_accepted(_Req) ->
    [].
 
 %%
-'GET'(_, {_Url, _Heads, Env}, _) ->
+'GET'(_Type, _Msg, {_Url, _Heads, Env}) ->
 	{ok, 
 		jsx:encode([
 			{env,   [env(X) || X <- Env]}

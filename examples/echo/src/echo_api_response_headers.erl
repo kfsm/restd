@@ -20,7 +20,7 @@ content_accepted(_Req) ->
    [].
 
 %%
-'GET'(_, {Uri, _Heads, _Env}, _) ->
+'GET'(_Type, _Msg, {Uri, _Heads, _Env}) ->
 	H = uri:q(Uri),
 	{ok, H, 
 		jsx:encode([

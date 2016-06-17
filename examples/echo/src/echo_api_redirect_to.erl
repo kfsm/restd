@@ -20,6 +20,6 @@ content_accepted(_Req) ->
    [].
 
 %%
-'GET'(_, {Url, _Heads, _Env}, _) ->
+'GET'(_Type, _Msg, {Url, _Heads, _Env}) ->
 	{302, [{'Location', uri:q(url, <<>>, Url)}], <<>>}.
 

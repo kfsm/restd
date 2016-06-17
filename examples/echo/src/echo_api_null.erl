@@ -21,10 +21,10 @@ content_accepted(_Req) ->
    [].
 
 %%
-'GET'(_, {Url, Heads, Env}, _) ->
+'GET'(_Type, _Msg, {Url, Heads, Env}) ->
    error_logger:error_report([{url, uri:s(Url)}] ++ Heads ++ Env),
    {ok, <<>>}.   
 
-'POST'(_, {Url, Heads, Env}, Msg) ->
+'POST'(_Type, Msg, {Url, Heads, Env}) ->
    error_logger:error_report([{url, uri:s(Url)}, {payload, Msg}] ++ Heads ++ Env),
    {ok, <<>>}.

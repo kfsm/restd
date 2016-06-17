@@ -20,7 +20,7 @@ content_accepted(_Req) ->
    [].
 
 %%
-'GET'(_, {_, Heads, _Env}, _) ->
+'GET'(_Type, _Msg, {_, Heads, _Env}) ->
 	{_, UA} = lists:keyfind('User-Agent', 1, Heads),
 	{ok, 
 		jsx:encode([

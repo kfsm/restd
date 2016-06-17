@@ -20,7 +20,7 @@ content_accepted(_Req) ->
    [{'*', '*'}].
 
 %%
-'POST'(_, {Url, Heads, Env}, Msg) ->
+'POST'(_Type, Msg, {Url, Heads, Env}) ->
 	{_, Peer}  = lists:keyfind(peer, 1, Env),
 	H = [header(X) || X <- Heads],
 	{ok, 

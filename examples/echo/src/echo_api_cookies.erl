@@ -20,7 +20,7 @@ content_accepted(_Req) ->
    [].
 
 %%
-'GET'(_, {Uri, Heads, _Env}, _) ->
+'GET'(_Type, _Msg, {Uri, Heads, _Env}) ->
 	case uri:get(segments, Uri) of
 		[<<"cookies">>] ->
 			% TODO: parse Cookie header

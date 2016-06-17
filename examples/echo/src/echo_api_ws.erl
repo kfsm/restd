@@ -3,8 +3,8 @@
 -export([
    allowed_methods/1,
    content_provided/1, 
-   'GET'/3,
-   stream/4
+   recv/3,
+   send/3
 ]).
 
 %%
@@ -16,13 +16,12 @@ content_provided(_Req) ->
    [{application, json}, {text, plain}].
 
 %%
-'GET'(_, {_Url, _Heads, Env}, Msg) ->
-   io:format("==> ~p~n", [Msg]),
+%%
+recv(_Type, Msg, {_Url, _Head, _Env}) ->
    Self = self(),
    spawn(fun() -> Self ! Msg end),
-   ok.   
+   {ok, Msg}.
 
 %%
-stream(_, _, _, Msg) ->
-   io:format("--> ~p~n", [Msg]),
-   Msg.
+send(_Type, Msg, {_Url, _Head, _Env}) ->
+   {ok, <<$+, $+, $+, $ , Msg/binary>>}.

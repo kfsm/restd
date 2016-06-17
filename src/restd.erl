@@ -25,7 +25,7 @@
 -export([start_link/2]).
 -export([
    routes/2,
-   return/4
+   return/5
 ]).
 
 
@@ -121,8 +121,9 @@ route({Path, Resource, Env}) ->
    %% The restd do the best effort to load the module but ignores any possible errors
    code:load_file(Resource),
    Pattern = uri:segments( uri:new(Path) ),
+   Export  = Resource:module_info(exports),
    hornlog:rule(
-      hornlog:head(fun restd:return/4, [Pattern, Resource, Env]), 
+      hornlog:head(fun restd:return/5, [Pattern, Resource, Export, Env]), 
       lists:map(fun pattern/1 , Pattern)
    );
 route({Route, Resource}) ->
@@ -135,7 +136,7 @@ pattern(X) ->
    X.
 
 %% return matched result
-return(Pattern, Resource, Env, Uri) ->
+return(Pattern, Resource, Export, Env, Uri) ->
    Lenv = lists:map(
       fun({<<$:, Key/binary>>, Val}) ->
          {Key, Val}
@@ -145,7 +146,7 @@ return(Pattern, Resource, Env, Uri) ->
          lists:zip(Pattern, uri:segments(Uri))
       )
    ),
-   {Resource, Lenv ++ Env}.
+   #{resource => Resource, export => Export, env => Lenv ++ Env}.
 
    
 %%%----------------------------------------------------------------------------   

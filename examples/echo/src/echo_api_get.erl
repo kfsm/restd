@@ -20,7 +20,7 @@ content_accepted(_Req) ->
    [].
 
 %%
-'GET'(_, {Url, Heads, Env}, _) ->
+'GET'(_Type, _Msg, {Url, Heads, Env}) ->
 	{_, Peer}  = lists:keyfind(peer, 1, Env),
 	H = [header(X) || X <- Heads],
 	{ok, 

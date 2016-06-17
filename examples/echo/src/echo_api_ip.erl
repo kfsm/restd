@@ -15,11 +15,11 @@ content_provided(_Req) ->
    [{application, json}, {text, plain}].
 
 %%
-'GET'({text, plain}, {_Url, _Heads, Env}, _) ->
+'GET'({text, plain}, _Msg, {_Url, _Heads, Env}) ->
    {_, Peer}  = lists:keyfind(peer, 1, Env),
    {ok, uri:host(Peer)};
 
-'GET'(_, {_Url, _Heads, Env}, _) ->
+'GET'(_Type, _Msg, {_Url, _Heads, Env}) ->
 	{_, Peer}  = lists:keyfind(peer, 1, Env),
 	{ok, 
 		jsx:encode([

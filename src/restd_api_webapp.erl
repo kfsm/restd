@@ -41,7 +41,7 @@ exists(_, {Url, _Heads, Env}) ->
 
 %%
 %%
-'GET'(_, {Url, _Heads, Env}, _) ->
+'GET'(_Type, _Msg, {Url, _Heads, Env}) ->
 	Filename   = filename(Url, Env),
 	{ok, File} = file:read_file(Filename),
 	{ok, 

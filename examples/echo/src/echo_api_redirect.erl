@@ -20,7 +20,7 @@ content_accepted(_Req) ->
    [].
 
 %%
-'GET'(_, {Url, _Heads, Env}, _) ->
+'GET'(_Type, _Msg, {Url, _Heads, Env}) ->
 	case opts:val(<<"n">>, Env) of
 		<<"1">> ->
 			U = uri:set(path, <<"/get">>, Url),

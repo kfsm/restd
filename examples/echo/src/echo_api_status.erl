@@ -21,6 +21,6 @@ content_accepted(_Req) ->
    [].
 
 %%
-'GET'(_, {_Uri, _Heads, Env}, _) ->
+'GET'(_Type, _Msg, {_Uri, _Heads, Env}) ->
 	scalar:i(opts:val(<<"code">>, Env)).
 
