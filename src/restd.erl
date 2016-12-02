@@ -70,6 +70,11 @@ behaviour_info(callbacks) ->
       %% {authorize, 2}
 
       %%
+      %% define cors policy
+      %%
+      %% -spec(cors/1 :: (request()) -> [header()])
+
+      %%
       %% stream
       %%
       %% -spec(stream/? :: (...) -> ?).

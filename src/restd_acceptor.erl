@@ -20,6 +20,8 @@
 -module(restd_acceptor).
 -behaviour(pipe).
 
+-include("restd.hrl").
+
 -export([
 	start_link/3,
 	init/1,
@@ -34,13 +36,14 @@
 
 %% default state
 -record(fsm, {
-	uid       = undefined :: atom(),   %% service identity
+   uid       = undefined :: atom(),    %% service identity
+   resource  = undefined :: _,         %% restapi handler
+   q         = undefined :: datum:q()  %% current queue
 
-	method    = undefined :: atom(),
-	resource  = undefined :: atom(),   %% current resource handler (payload handling)
-	request   = undefined :: any(),    %% current request
-	content   = undefined :: any(),    %% current content handler
-	q         = undefined :: datum:q() %% current queue
+	% method    = undefined :: atom(),
+	% resource  = undefined :: atom(),   %% current resource handler (payload handling)
+	% request   = undefined :: any(),    %% current request
+	% content   = undefined :: any(),    %% current content handler
 }).
 
 %%%------------------------------------------------------------------
@@ -54,12 +57,7 @@ start_link(Uid, Uri, Opts) ->
 
 init([Uid, Uri, Opts]) ->
    knet:bind(Uri, Opts),
-   {ok, 'ACCEPT', 
-      #fsm{
-         uid = Uid,
-         q   = deq:new()
-      }
-   }.
+   {ok, 'ACCEPT', #fsm{uid = Uid}}.
 
 free(_Reason, _State) ->
 	ok.
@@ -87,9 +85,15 @@ ioctl(_, _) ->
 %%
 %%
 'ACCEPT'({http, _, {Mthd, Uri, Head, Env}}, Pipe, #fsm{uid = Service} = State) ->
-   case prerouting(http, resource(Service, Mthd, Uri, Head, Env)) of
-      {ok,   Request} ->
-         {next_state, 'HANDLE', State#fsm{request = Request, q = deq:new()}};
+   
+   case
+      restd_resource:do(
+         restd_resource:new(Service, {Mthd, Uri, Head}, Env),
+         prerouting_http()
+      )
+   of
+      {ok,  Resource} ->
+         {next_state, 'HANDLE', State#fsm{resource = Resource, q = deq:new()}};
 
       {error, Reason} ->
          pipe:a(Pipe, failure(Reason)),
@@ -97,9 +101,14 @@ ioctl(_, _) ->
    end;
 
 'ACCEPT'({ws, _, {Mthd, Uri, Head, Env}}, Pipe, #fsm{uid = Service} = State) ->
-   case prerouting(ws, resource(Service, Mthd, Uri, Head, Env)) of
-      {ok,   Request} ->
-         {next_state, 'WEBSOCK', State#fsm{request = Request, q = deq:new()}};
+   case
+      restd_resource:do(
+         restd_resource:new(Service, {Mthd, Uri, Head}, Env),
+         prerouting_ws()
+      )
+   of
+      {ok, Resource} ->
+         {next_state, 'WEBSOCK', State#fsm{resource = Resource, q = deq:new()}};
 
       {error, Reason} ->
          pipe:a(Pipe, failure(Reason)),
@@ -123,18 +132,15 @@ ioctl(_, _) ->
 %%%
 %%%------------------------------------------------------------------   
 
-'HANDLE'({http, _Uri, Pckt}, _Pipe, State)
+'HANDLE'({http, _Uri, Pckt}, _Pipe, #fsm{q = Q} = State)
  when is_binary(Pckt) ->
    {next_state, 'HANDLE', 
-   	State#fsm{
-   		q = deq:enq(Pckt, State#fsm.q)
-   	}
+   	State#fsm{q = deq:enq(Pckt, Q)}
    }; 
 
-'HANDLE'({http, _Uri, eof}, Pipe, #fsm{request = Req = #{accept := Type}, q = Q} = State) ->
+'HANDLE'({http, _Uri, eof}, Pipe, #fsm{resource = Resource, q = Q} = State) ->
    try
-      Response = routing(Req, deq:list(Q)),
-		case handle_response(Response, Type) of
+		case handle_response(restd_resource:restapi(Resource, deq:list(Q)), Resource#resource.head) of
 			%% no-payload, streaming
 			{_Code, _Heads} = Http ->
  				_ = pipe:a(Pipe, Http),
@@ -207,9 +213,9 @@ pipe_sink(Pipe) ->
 'WEBSOCK'({ws, _, {terminated, _}}, _Pipe, State) ->
    {stop, normal, State};
 
-'WEBSOCK'({ws, _, Msg}, Pipe, #fsm{request = #{id := Mod, accept := Accept} = Req} = State) ->
+'WEBSOCK'({ws, _, Msg}, Pipe, #fsm{resource = Resource} = State) ->
    try
-      case Mod:recv(Accept, Msg, req(Req)) of
+      case restd_resource:recv(Resource, Msg) of
          ok ->
             {next_state, 'WEBSOCK', State};
          {ok, Pckt} ->
@@ -222,9 +228,9 @@ pipe_sink(Pipe) ->
       {stop, normal, State}
    end;
 
-'WEBSOCK'(Msg, Pipe, #fsm{request = #{id := Mod, accept := Accept} = Req} = State) ->
+'WEBSOCK'(Msg, Pipe, #fsm{resource = Resource} = State) ->
    try
-      case Mod:send(Accept, Msg, req(Req)) of
+      case restd_resource:send(Resource, Msg) of
          ok ->
             {next_state, 'WEBSOCK', State};
          {ok, Pckt} ->
@@ -250,45 +256,40 @@ pipe_sink(Pipe) ->
 
 %%
 %%
-handle_response(stream, Type) ->
- 	{200, [{'Content-Type', Type}, {'Transfer-Encoding', <<"chunked">>}]};
+handle_response(stream, Head) ->
+ 	{200, [{'Transfer-Encoding', <<"chunked">>} | Head]};
 
-handle_response({stream, Heads}, Type) ->
-	case lists:keyfind('Content-Type', 1, Heads) of
-      false -> {200, [{'Transfer-Encoding', <<"chunked">>}, {'Content-Type', Type} | Heads]};
-      _     -> {200, [{'Transfer-Encoding', <<"chunked">>} | Heads]}
-   end; 	
+handle_response({stream, HeadB}, HeadA) ->
+   %% @todo: use orddict + merge
+   {200, [{'Transfer-Encoding', <<"chunked">>} | HeadB] ++ HeadA};
 
-handle_response({Code, {s, _, _}=Stream}, Type) ->
-   {Code, [{'Content-Type', Type}, {'Transfer-Encoding', <<"chunked">>}], Stream};
+handle_response({Code, {s, _, _}=Stream}, Head) ->
+   {Code, [{'Transfer-Encoding', <<"chunked">>}|Head], Stream};
 
-handle_response({Code, Msg}, Type)
+handle_response({Code, Msg}, Head)
  when is_binary(Msg) ->
- 	{Code, [{'Content-Type', Type}, {'Content-Length', size(Msg)}], Msg};
+ 	{Code, [{'Content-Length', size(Msg)}|Head], Msg};
 
-handle_response({Code, Msg}, Type)
+handle_response({Code, Msg}, Head)
  when is_list(Msg) ->
- 	handle_response({Code, erlang:iolist_to_binary(Msg)}, Type);
+ 	handle_response({Code, erlang:iolist_to_binary(Msg)}, Head);
 
-handle_response({Code, Heads, {s, _, _}=Stream}, Type) ->
-   case lists:keyfind('Content-Type', 1, Heads) of
-      false -> {Code, [{'Content-Type', Type}, {'Transfer-Encoding', <<"chunked">>} | Heads], Stream};
-      _     -> {Code, [{'Transfer-Encoding', <<"chunked">>} | Heads], Stream}
-   end;  
+handle_response({Code, HeadB, {s, _, _}=Stream}, HeadA) ->
+   %% @todo: use orddict + merge
+   {Code, [{'Transfer-Encoding', <<"chunked">>} | HeadB] ++ HeadA, Stream};
 
-handle_response({Code, Heads, Msg}, Type)
+handle_response({Code, HeadB, Msg}, HeadA)
  when is_binary(Msg) ->
-	case lists:keyfind('Content-Type', 1, Heads) of
-      false -> {Code, [{'Content-Type', Type}, {'Content-Length', size(Msg)} | Heads], Msg};
-      _     -> {Code, [{'Content-Length', size(Msg)} | Heads], Msg}
-   end; 	
-handle_response({Code, Heads, Msg}, Type)
- when is_list(Msg) ->
- 	handle_response({Code, Heads, erlang:iolist_to_binary(Msg)}, Type);
+   %% @todo: use orddict + merge
+   {Code, [{'Content-Length', size(Msg)} | HeadB] ++ HeadA, Msg};
 
-handle_response(Code, Type)
+handle_response({Code, Heads, Msg}, Head)
+ when is_list(Msg) ->
+ 	handle_response({Code, Heads, erlang:iolist_to_binary(Msg)}, Head);
+
+handle_response(Code, Head)
  when is_atom(Code) orelse is_integer(Code) ->
-   {Code, [{'Content-Type', Type}, {'Content-Length', 0}], <<>>}.
+   {Code, [{'Content-Length', 0}|Head], <<>>}.
 
 
 %%
@@ -315,45 +316,28 @@ handle_failure(Reason) ->
 %%%------------------------------------------------------------------   
 
 %%
-%% create new resource description
-resource(Service, Mthd, Url, Head, Env) ->
-   #{
-      id => Service,
-      method => Mthd,
-      url => Url,
-      header => Head,
-      env => Env
-   }.
-
-%%
 %% request pre-routing
-prerouting(http, Request) ->
-   do(Request, [
-      fun is_resource_available/1,
-      fun is_method_implemented/1,
-      fun is_method_allowed/1,
-      fun is_access_authorized/1,
-      fun is_content_supported/1,
-      fun is_content_acceptable/1,
-      fun is_resource_exists/1
-   ]);
+prerouting_http() ->
+   [
+      fun restd_resource:is_available/1,
+      fun restd_resource:is_method_implemented/1,
+      fun restd_resource:is_method_allowed/1,
+      fun restd_resource:is_access_authorized/1,
+      fun restd_resource:is_content_supported/1,
+      fun restd_resource:is_content_acceptable/1,
+      fun restd_resource:is_resource_exists/1,
+      fun restd_resource:is_cors_allowed/1
+   ].
 
-prerouting(ws, Request) ->
-   do(Request, [
-      fun is_resource_available/1,
-      fun is_method_allowed/1,
-      fun is_access_authorized/1,
-      fun is_content_supported/1,
-      fun is_content_acceptable/1,
-      fun is_resource_exists/1
-   ]).
-
-
-%%
-%% request routing
-routing(#{method := Mthd, accept := Accept} = Req, Inbound) ->
-   f(Req, Mthd, Accept, erlang:iolist_to_binary(Inbound)).
-
+prerouting_ws() ->
+   [
+      fun restd_resource:is_available/1,
+      fun restd_resource:is_method_allowed/1,
+      fun restd_resource:is_access_authorized/1,
+      fun restd_resource:is_content_supported/1,
+      fun restd_resource:is_content_acceptable/1,
+      fun restd_resource:is_resource_exists/1      
+   ].
 
 %%
 %% request failure
@@ -362,155 +346,3 @@ failure(Reason) ->
    handle_failure({error, Reason}).
 
 
-%%
-%% 
-is_resource_available(#{id := Service, url := Url, env := LEnv} = Req) ->
-   try
-      #{
-         resource := Mod, 
-         export := Export, 
-         env := GEnv
-      } = hornlog:q(Service, uri:segments(Url), Url),
-      {ok, Req#{id => Mod, export => Export, env => LEnv ++ GEnv}}
-   catch _:_ ->
-      {error, not_available}
-   end.
-
-%%
-%%
-is_method_implemented(#{export := Export, method := Mthd} = Req) ->
-   case lists:keyfind(Mthd, 1, Export) of
-      false ->
-         {error, not_implemented};
-      _ ->
-         {ok, Req}
-   end.
-
-%%
-%% 
-is_method_allowed(#{method := Mthd} = Req) ->
-   List = f(Req, allowed_methods),
-   case lists:member(Mthd, List) of
-      false -> 
-         {error, not_allowed};
-      true  -> 
-         {ok, Req}
-   end.
-
-%%
-%% 
-is_access_authorized(#{method := Mthd} = Req) ->
-   case f(Req, authorize, Mthd) of
-      ok ->
-         {ok, Req};
-      _  ->
-         {error, unauthorized}
-   end.
-
-%%
-%% 
-is_content_supported(#{header := Head} = Req) ->
-   case opts:val('Content-Type', undefined, Head) of
-      % content type is not defined
-      undefined ->
-         {ok, Req};
-
-      % content type is defined by request 
-      ContentType ->
-         case content_type(ContentType, f(Req, content_accepted)) of
-            [Value|_] ->
-               {ok, Req#{content_type => Value}};
-            _ ->
-               {error, not_acceptable}
-         end
-   end.
-
-%%
-%% 
-is_content_acceptable(#{header := Head} = Req) ->
-   List = f(Req, content_provided),
-   case
-      lists:flatten(
-         lists:map(
-            fun(X) -> content_type(X, List) end,
-            opts:val('Accept', [{'*', '*'}], Head)
-         )
-      )
-   of
-      [Value|_] ->
-         {ok, Req#{accept => Value}};
-      _ ->
-         {error, not_acceptable}
-   end.
-
-%%
-%
-is_resource_exists(#{accept := Accept} = Req) -> 
-   case f(Req, exists, Accept) of
-      true ->
-         {ok, Req};
-      _    ->
-         {error, not_found}
-   end.
-
-%%
-%% match content type(s)
-content_type({Major, Minor}, List) ->
-   MajorF = fun({X, _}) -> 
-      scalar:s(X)  =:= Major  
-      orelse X     =:= '*'  
-      orelse Major =:= '*' 
-   end,
-   MinorF = fun({_, X}) -> 
-      scalar:s(X)  =:= Minor  
-      orelse X     =:= '*'  
-      orelse Minor =:= '*' 
-   end,
-   lists:filter(MinorF, lists:filter(MajorF, List)).
-
-%%
-%% error monad function binding 
-%% fun(Request) -> Request.
-do(X, [H | T]) ->
-   case H(X) of
-      {error, _} = Error ->
-         Error;
-      {ok, Y} ->
-         do(Y, T)
-   end;
-do(X, []) ->
-   {ok, X}.
-
-%%
-%% apply resource function
-f(#{id := Mod, export := Export} = Req, Fun) ->
-   case lists:keyfind(Fun, 1, Export) of
-      false -> default(Fun);
-      _     -> Mod:Fun(req(Req))
-   end.
-
-f(#{id := Mod, export := Export} = Req, Fun, X) ->
-   case lists:keyfind(Fun, 1, Export) of
-      false -> default(Fun);
-      _     -> Mod:Fun(X, req(Req))
-   end.
-
-f(#{id := Mod, export := Export} = Req, Fun, X, Y) ->
-   case lists:keyfind(Fun, 1, Export) of
-      false -> default(Fun);
-      _     -> Mod:Fun(X, Y, req(Req))
-   end.
-
-
-%%
-%% build a resource context 
-req(#{url := Url, header := Head, env := Env}) ->
-   {Url, Head, Env}.
-
-%%
-%%
-default(allowed_methods) -> ['GET', 'HEAD', 'OPTIONS'];
-default(authorize) -> ok;
-default(content_accepted) -> [{'*', '*'}];
-default(content_provided) -> [];
-default(exists) -> true.
