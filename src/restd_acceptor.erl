@@ -261,7 +261,7 @@ handle_response(stream, Head) ->
 
 handle_response({stream, HeadB}, HeadA) ->
    %% @todo: use orddict + merge
-   {200, [{'Transfer-Encoding', <<"chunked">>} | HeadB] ++ HeadA};
+   {200, join_head('Content-Type', [{'Transfer-Encoding', <<"chunked">>} | HeadB], HeadA)};
 
 handle_response({Code, {s, _, _}=Stream}, Head) ->
    {Code, [{'Transfer-Encoding', <<"chunked">>}|Head], Stream};
@@ -276,12 +276,12 @@ handle_response({Code, Msg}, Head)
 
 handle_response({Code, HeadB, {s, _, _}=Stream}, HeadA) ->
    %% @todo: use orddict + merge
-   {Code, [{'Transfer-Encoding', <<"chunked">>} | HeadB] ++ HeadA, Stream};
+   {Code, join_head('Content-Type', [{'Transfer-Encoding', <<"chunked">>} | HeadB], HeadA), Stream};
 
 handle_response({Code, HeadB, Msg}, HeadA)
  when is_binary(Msg) ->
    %% @todo: use orddict + merge
-   {Code, [{'Content-Length', size(Msg)} | HeadB] ++ HeadA, Msg};
+   {Code, join_head('Content-Type', [{'Content-Length', size(Msg)} | HeadB], HeadA), Msg};
 
 handle_response({Code, Heads, Msg}, Head)
  when is_list(Msg) ->
@@ -291,6 +291,11 @@ handle_response(Code, Head)
  when is_atom(Code) orelse is_integer(Code) ->
    {Code, [{'Content-Length', 0}|Head], <<>>}.
 
+join_head(H, A, B) ->
+   case lists:keyfind(H, 1, A) of
+      false -> A ++ B;
+      _     -> A ++ lists:filter(fun({K, _}) -> K =/= H end, B)
+   end.
 
 %%
 %% failure on HTTP request
