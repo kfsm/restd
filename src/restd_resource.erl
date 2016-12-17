@@ -41,16 +41,16 @@ do(Request0, []) ->
 %%
 %% apply rest resource function
 restapi(#resource{request = {Mthd, _, _}, env = Env} = Resource, Inbound) ->
-   {'Accept', Accept} = lists:keyfind('Accept', 1, Env),
-   f(Resource, Mthd, Accept, erlang:iolist_to_binary(Inbound)).
+   {_, Mime} = lists:keyfind('Content-Type', 1, Env),
+   f(Resource, Mthd, Mime, erlang:iolist_to_binary(Inbound)).
 
 recv(#resource{module = Mod, env = Env} = Resource, Msg) ->
-   {'Accept', Accept} = lists:keyfind('Accept', 1, Env),
-   Mod:recv(Accept, Msg, req(Resource)).
+   {_, Mime} = lists:keyfind('Content-Type', 1, Env),
+   Mod:recv(Mime, Msg, req(Resource)).
 
 send(#resource{module = Mod, env = Env} = Resource, Msg) ->
-   {'Accept', Accept} = lists:keyfind('Accept', 1, Env),
-   Mod:send(Accept, Msg, req(Resource)).
+   {_, Mime} = lists:keyfind('Content-Type', 1, Env),
+   Mod:send(Mime, Msg, req(Resource)).
 
 %%
 %% 
@@ -100,21 +100,9 @@ is_access_authorized(#resource{request = {Mthd, Url, _}} = Resource) ->
 %%
 %% 
 is_content_supported(#resource{request = {_, _, Head}} = Resource) ->
-   case opts:val('Content-Type', undefined, Head) of
-      % content type is not defined
-      undefined ->
-         {ok, Resource};
-
-      % content type is defined by request 
-      ContentType ->
-         case content_type(ContentType, f(Resource, content_accepted)) of
-            [Value | _] ->
-               {ok, set_content_type(Value, Resource)};
-            _ ->
-               % {error, {not_acceptable, ContentType}}
-               {error, not_acceptable}
-         end
-   end.
+   List = f(Resource, content_accepted),
+   [Value|_] = content_type(opts:val('Content-Type', {'*', '*'}, Head), List),
+   {ok, set_ingress_mime(Value, Resource)}.
 
 %%
 %% 
@@ -129,15 +117,15 @@ is_content_acceptable(#resource{request = {_, _, Head}} = Resource) ->
       )
    of
       [Value | _] ->
-         {ok, set_accept_type(Value, Resource)};
+         {ok, set_egress_mime(Value, Resource)};
       _ ->
          {error, not_acceptable}
    end.
 
 %%
 %%
-is_resource_exists(#resource{env = Env} = Req) -> 
-   {'Accept', Accept} = lists:keyfind('Accept', 1, Env),
+is_resource_exists(#resource{head = Head} = Req) -> 
+   {_, Accept} = lists:keyfind('Content-Type', 1, Head),
    case f(Req, exists, Accept) of
       true ->
          {ok, Req};
@@ -181,13 +169,13 @@ content_type({Major, Minor}, List) ->
 
 %%
 %%
-set_content_type(Type, #resource{head = Head} = Resource) ->
-   Resource#resource{head = [{'Content-Type', Type}|Head]}.
+set_ingress_mime(Type, #resource{env = Env} = Resource) ->
+   Resource#resource{env = [{'Content-Type', Type}|Env]}.
 
 %%
 %%
-set_accept_type(Type, #resource{env = Env} = Resource) ->
-   Resource#resource{env = [{'Accept', Type}|Env]}.
+set_egress_mime(Type, #resource{head = Head} = Resource) ->
+   Resource#resource{head = [{'Content-Type', Type}|Head]}.
 
 %%
 %% apply resource function
