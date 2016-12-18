@@ -123,7 +123,9 @@ route({Path, Resource, Env}) ->
    %%
    %% the load of resource is required for any other deployment configuration
    %% except OTP releases. Not Available error is returned if code is not loaded. 
-   %% The restd do the best effort to load the module but ignores any possible errors
+   %% The restd do the best effort to load the module but ignores any possible errors.
+   %% Purge is required if same module is bound to multiple end-points 
+   code:purge(Resource),
    code:load_file(Resource),
    Pattern = uri:segments( uri:new(Path) ),
    Export  = Resource:module_info(exports),
