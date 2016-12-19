@@ -2,16 +2,16 @@
    report, 
    verbose, 
    {i, "include"}, 
-   {outdir, "ebin"},
+   {outdir, "_build/default/lib/restd/ebin"},
    debug_info, 
    {parse_transform, lager_transform}
 ]}.
 
-{"examples/echo/src/*", [
+{"apps/echo/src/*", [
    report, 
    verbose, 
    {i, "include"}, 
-   {outdir, "examples/echo/ebin"},
+   {outdir, "_build/default/lib/echo/ebin"},
    debug_info, 
    {parse_transform, lager_transform}
 ]}.

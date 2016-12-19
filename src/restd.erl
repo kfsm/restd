@@ -139,6 +139,8 @@ route({Route, Resource}) ->
 %% build uri pattern matcher
 pattern(<<$:, _/binary>>) ->
    '_';
+pattern(<<$_>>) ->
+   '_';
 pattern(X) ->
    X.
 

@@ -66,7 +66,7 @@ exists(_, {Url, _Heads, Env}) ->
 filename(Url, Env) ->
    case opts:val(<<"file">>, undefined, Env) of
       undefined ->
-         filename:join([htdoc(Env), path(Env), file(Url)]);
+         filename:join([htdoc(Env), path(Env)| file(Url)]);
       File ->
          filename:join([htdoc(Env), path(Env), hd(segments([scalar:s(File)]))])
    end.
