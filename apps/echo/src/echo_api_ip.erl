@@ -2,7 +2,7 @@
 
 -export([
 	allowed_methods/1,
-	content_provided/1, 
+	content_provided/1,
    'GET'/3
 ]).
 

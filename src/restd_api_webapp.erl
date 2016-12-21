@@ -105,8 +105,8 @@ segments(Segments) ->
 %%
 file(Url) ->
    case uri:segments(Url) of
-      undefined -> <<"index.html">>;
-      []        -> <<"index.html">>;
+      undefined -> [<<"index.html">>];
+      []        -> [<<"index.html">>];
       Segments  -> segments(Segments)
    end.
 

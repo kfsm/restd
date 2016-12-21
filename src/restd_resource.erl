@@ -101,8 +101,12 @@ is_access_authorized(#resource{request = {Mthd, Url, _}} = Resource) ->
 %% 
 is_content_supported(#resource{request = {_, _, Head}} = Resource) ->
    List = f(Resource, content_accepted),
-   [Value|_] = content_type(opts:val('Content-Type', {'*', '*'}, Head), List),
-   {ok, set_ingress_mime(Value, Resource)}.
+   case content_type(opts:val('Content-Type', {'*', '*'}, Head), List) of
+      [Value|_] -> 
+         {ok, set_ingress_mime(Value, Resource)};
+      _ ->
+         {ok, set_ingress_mime({'*', '*'}, Resource)}
+   end.
 
 %%
 %% 
@@ -212,7 +216,7 @@ default(authorize)        ->
    ok;
 
 default(content_accepted) -> 
-   [{'*', '*'}];
+   [];
 
 default(content_provided) -> 
    [{application, json}];

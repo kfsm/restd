@@ -19,6 +19,7 @@
 %%    acceptor process
 -module(restd_acceptor).
 -behaviour(pipe).
+-compile({parse_transform, category}).
 
 -include("restd.hrl").
 
@@ -85,12 +86,8 @@ ioctl(_, _) ->
 %%
 %%
 'ACCEPT'({http, _, {Mthd, Uri, Head, Env}}, Pipe, #fsm{uid = Service} = State) ->
-   
    case
-      restd_resource:do(
-         restd_resource:new(Service, {Mthd, Uri, Head}, Env),
-         prerouting_http()
-      )
+      prerouting_http(restd_resource:new(Service, {Mthd, Uri, Head}, Env))
    of
       {ok,  Resource} ->
          {next_state, 'HANDLE', State#fsm{resource = Resource, q = deq:new()}};
@@ -102,10 +99,7 @@ ioctl(_, _) ->
 
 'ACCEPT'({ws, _, {Mthd, Uri, Head, Env}}, Pipe, #fsm{uid = Service} = State) ->
    case
-      restd_resource:do(
-         restd_resource:new(Service, {Mthd, Uri, Head}, Env),
-         prerouting_ws()
-      )
+      prerouting_ws(restd_resource:new(Service, {Mthd, Uri, Head}, Env))
    of
       {ok, Resource} ->
          {next_state, 'WEBSOCK', State#fsm{resource = Resource, q = deq:new()}};
@@ -263,6 +257,17 @@ handle_response({stream, HeadB}, HeadA) ->
    %% @todo: use orddict + merge
    {200, join_head('Content-Type', [{'Transfer-Encoding', <<"chunked">>} | HeadB], HeadA)};
 
+%% @todo: define error formating at resource with default implementation at restd
+handle_response({error, {Code, Reason}}, HeadA)
+ when is_binary(Reason) ->
+   handle_response({Code, Reason}, HeadA);
+
+handle_response({error, {Code, Reason}}, HeadA) ->
+   handle_response({Code, scalar:s(io_lib:format("~p~n", [Reason]))}, HeadA);
+
+handle_response({error, Reason}, HeadA) ->
+   handle_response({500, scalar:s(io_lib:format("~p~n", [Reason]))}, HeadA);
+
 handle_response({Code, {s, _, _}=Stream}, Head) ->
    {Code, [{'Transfer-Encoding', <<"chunked">>}|Head], Stream};
 
@@ -322,9 +327,9 @@ handle_failure(Reason) ->
 
 %%
 %% request pre-routing
-prerouting_http() ->
-   [
-      fun restd_resource:is_available/1,
+prerouting_http(X) ->
+   [$^||
+      restd_resource:is_available(X),
       fun restd_resource:is_method_implemented/1,
       fun restd_resource:is_method_allowed/1,
       fun restd_resource:is_access_authorized/1,
@@ -334,9 +339,9 @@ prerouting_http() ->
       fun restd_resource:is_cors_allowed/1
    ].
 
-prerouting_ws() ->
-   [
-      fun restd_resource:is_available/1,
+prerouting_ws(X) ->
+   [$^||
+      restd_resource:is_available(X),
       fun restd_resource:is_method_allowed/1,
       fun restd_resource:is_access_authorized/1,
       fun restd_resource:is_content_supported/1,
