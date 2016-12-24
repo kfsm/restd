@@ -13,7 +13,7 @@
 ]).
 
 -export([
-   restd_get_ok/1, restd_not_implemented/1, restd_not_allowed/1
+   restd_get_ok/1, restd_not_available/1, restd_not_implemented/1, restd_not_allowed/1
 ]).
 
 %%%----------------------------------------------------------------------------   
@@ -29,7 +29,7 @@ all() ->
 groups() ->
    [
       {restapi, [parallel], 
-         [restd_get_ok, restd_not_implemented, restd_not_allowed]}
+         [restd_get_ok, restd_not_available, restd_not_implemented, restd_not_allowed]}
    ].
 
 %%%----------------------------------------------------------------------------   
@@ -79,6 +79,14 @@ restd_get_ok(_) ->
    {http, Sock, {200, <<"OK">>, _Head, _Env}} = knet:recv(Sock),
    {http, Sock, <<"restd">>} = knet:recv(Sock),
    {http, Sock, eof} = knet:recv(Sock).
+
+restd_not_available(_) ->
+   Uri  = uri:path(<<"/test/unavailable">>, uri:new(?URI)),
+   Sock = socket(Uri, {'DELETE', Uri, [{'Connection', 'keep-alive'}]}),
+   {http, Sock, {503, <<"Service Unavailable">>, _Head, _Env}} = knet:recv(Sock),
+   {http, Sock, _} = knet:recv(Sock),
+   {http, Sock, eof} = knet:recv(Sock).
+
 
 restd_not_implemented(_) ->
    Uri  = uri:path(<<"/test/a">>, uri:new(?URI)),
