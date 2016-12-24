@@ -19,7 +19,7 @@ content_provided(_Req) ->
 	case opts:val(<<"n">>, Env) of
 		<<"1">> ->
 			U = uri:set(path, <<"/get">>, Url),
-			{302, [{'Location', uri:to_binary(U)}], <<>>};
+			{302, [{'Location', uri:s(U)}], <<>>};
 		Count   ->
 			N = scalar:i(Count) - 1,
 			U = uri:segments([<<"redirect">>, scalar:s(N)], Url),

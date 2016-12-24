@@ -18,6 +18,7 @@
 %% @description
 %%    webapp container
 -module(restd_api_webapp).
+-compile({parse_transform, category}).
 
 -export([
    allowed_methods/1,
@@ -52,14 +53,20 @@ exists(_, {Url, _Heads, Env}) ->
 %%
 %%
 'GET'(_Type, _Msg, {Url, _Heads, Env}) ->
-   Filename   = filename(Url, Env),
-   {ok, File} = file:read_file(Filename),
-   {ok, 
-      [
-         {'Content-Type', mime(filename:extension(Filename))}
-      ], 
-      File
+   [$^||
+      readfile(Url, Env),
+      sendfile(Url, Env, _)
+   ].
+
+readfile(Url, Env) ->
+   file:read_file(filename(Url, Env)).
+
+sendfile(Url, Env, Content) ->
+   Type = mime(filename:extension(filename(Url, Env))),
+   {ok,
+      {200, [{'Content-Type', Type}], Content}
    }.
+      
 
 %%
 %%

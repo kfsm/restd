@@ -19,13 +19,15 @@
 %%   * abstract routing table
 %%   * clean-up acceptor
 -module(restd).
+-compile({parse_transform, partial}).
 
 -export([behaviour_info/1]).
 -export([start/0]).
 -export([start_link/2]).
 -export([
    routes/2,
-   return/5
+   return/5,
+   negotiate/2
 ]).
 
 
@@ -156,6 +158,18 @@ return(Pattern, Resource, Export, Env, Uri) ->
       )
    ),
    #{resource => Resource, export => Export, env => Lenv ++ Env}.
+
+%%
+%% applies content negotiation algorithms
+%% (see https://en.wikipedia.org/wiki/Content_negotiation)
+negotiate({Major, Minor}, Types) ->
+   lists:filter(minor(Minor, _), lists:filter(major(Major, _), Types)).
+
+major(A, {B, _}) ->
+   scalar:s(B) =:= A orelse A =:= '*' orelse B =:= '*'.
+
+minor(A, {_, B}) ->
+   scalar:s(B) =:= A orelse A =:= '*' orelse B =:= '*'.
 
    
 %%%----------------------------------------------------------------------------   
