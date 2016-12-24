@@ -18,11 +18,11 @@
 %% @description
 %%    acceptor process
 -module(restd_acceptor).
--compile({parse_transform, category}).
--compile({parse_transform, partial}).
-
 -behaviour(pipe).
 
+-compile({parse_transform, category}).
+-compile({parse_transform, partial}).
+-include_lib("datum/include/datum.hrl").
 
 -export([
    start_link/3,
@@ -125,16 +125,16 @@ free(_Reason, _State) ->
 
 'HTTP'({http, _Uri, eof}, Pipe, #http{route = Route, q = Q} = State) ->
    case rest(State#http{q = undefined}, deq:list(Q)) of
-      {ok, {s, _, _} = Http} ->
+      ?XOR_R({s, _, _} = Http) ->
          streams:foreach(pipe:a(Pipe, _), Http);
 
-      {ok, Http} ->
+      ?XOR_R(Http) ->
          lists:foreach(pipe:a(Pipe, _), Http);
 
-      {error, {_, _, _} = Error} ->
+      ?XOR_L({_, _, _} = Error) ->
          pipe:a(Pipe, Error);
 
-      {error, {Code, _} = Error} ->
+      ?XOR_L({Code, _} = Error) ->
          {ok, Http} = packetize({application, json}, {Code, jsx:encode([Error])}),
          lists:foreach(pipe:a(Pipe, _), Http)         
    end,
@@ -156,12 +156,13 @@ free(_Reason, _State) ->
 
 'WEBSOCK'({ws, _, _} = Msg, Pipe, #http{} = State) ->
    case stream(State) of
-      {ok, #rest{} = Rest} ->
+      ?XOR_R(#rest{} = Rest) ->
          'WEBSOCK'(Msg, Pipe, Rest);
 
-      {error, Error} ->
-         % web-socket is already established we can send only error and terminate connection
-         pipe:a(Pipe, jsx:encode([Error])),
+      ?XOR_L(_Error) ->
+         % web-socket is already established, 
+         % we cannot use HTTP status code to indicate routing error
+         % Routing is failed send only error and terminate connection
          {stop, normal, State} 
    end;
 
@@ -427,20 +428,13 @@ execute(#rest{mthd = Mthd, head = Head, env = Env} = Rest, Entity) ->
    InType = opts:val('Content-Type', undefined, Head),
    % REST call returns either Http Type or Xor 
    case f(Rest, Mthd, {EgType, InType}, Entity) of
-      % Xor type
-      {ok, {_, _} = Http} -> 
+      ?XOR_R(Http) ->
          packetize(EgType, Http);
-      {ok, {_, _, _} = Http} -> 
-         packetize(EgType, Http);
-      {error, Reason} -> 
+      ?XOR_L(Reason) ->
          {error, fail(Rest, Reason)};
-      % Http type
       Http -> 
          packetize(EgType, Http)
    end.
-
-packetize(Type, {Code, Entity}) ->
-   packetize(Type, {Code, [], Entity});
 
 packetize(Type, {Code, Head0, Entity}) 
  when is_binary(Entity) ->
@@ -471,9 +465,16 @@ packetize(Type, {Code, Head0, {s, _, _} = Entity}) ->
    ],
    {ok, stream:'++'(stream:new({Code, Head1}), Entity)};
 
-packetize(_Type, Code)
+packetize(Type, {Code, Entity}) ->
+   packetize(Type, {Code, [], Entity});
+
+packetize(Type, Code)
  when is_atom(Code) orelse is_integer(Code) ->
-   {ok, [{Code, [{'Content-Length', 0}], <<>>}]}.
+   packetize(Type, {Code, [], <<>>});
+
+packetize(Type, Entity) ->
+   packetize(Type, {ok, [], Entity}).
+
 
 add_head(Head, Value, Heads) ->
    case lists:keyfind(Head, 1, Heads) of
