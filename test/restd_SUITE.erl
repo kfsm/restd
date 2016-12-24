@@ -13,7 +13,7 @@
 ]).
 
 -export([
-   restd_get/1
+   restd_get_ok/1, restd_not_implemented/1, restd_not_allowed/1
 ]).
 
 %%%----------------------------------------------------------------------------   
@@ -29,7 +29,7 @@ all() ->
 groups() ->
    [
       {restapi, [parallel], 
-         [restd_get]}
+         [restd_get_ok, restd_not_implemented, restd_not_allowed]}
    ].
 
 %%%----------------------------------------------------------------------------   
@@ -58,9 +58,9 @@ end_per_group(_, _Config) ->
 restapi() ->
    {ok, Pid} = restd:start_link(default, [
       {port,    "http://*:8888"},
-      {backlog, 2},
+      {backlog, 1024},
       {route, [
-         {"/get",  restd_get}
+         {"/test/a",  restd_restapi_a}
       ]}
    ]),
    erlang:unlink(Pid).
@@ -73,12 +73,36 @@ restapi() ->
 %%%----------------------------------------------------------------------------   
 -define(URI,     "http://127.0.0.1:8888/").
 
-restd_get(_) ->
-   Uri  = uri:path(<<"/get">>, uri:new(?URI)),
-   Sock = knet:socket(Uri),
-   _    = knet:send(Sock, {'GET', Uri, []}),
-   {ioctl, b, Sock} = knet:recv(Sock),
+restd_get_ok(_) ->
+   Uri  = uri:path(<<"/test/a">>, uri:new(?URI)),
+   Sock = socket(Uri, {'GET', Uri, [{'Connection', 'keep-alive'}]}),
    {http, Sock, {200, <<"OK">>, _Head, _Env}} = knet:recv(Sock),
    {http, Sock, <<"restd">>} = knet:recv(Sock),
    {http, Sock, eof} = knet:recv(Sock).
 
+restd_not_implemented(_) ->
+   Uri  = uri:path(<<"/test/a">>, uri:new(?URI)),
+   Sock = socket(Uri, {'DELETE', Uri, [{'Connection', 'keep-alive'}]}),
+   {http, Sock, {501, <<"Not Implemented">>, _Head, _Env}} = knet:recv(Sock),
+   {http, Sock, _} = knet:recv(Sock),
+   {http, Sock, eof} = knet:recv(Sock).
+
+restd_not_allowed(_) ->
+   Uri  = uri:path(<<"/test/a">>, uri:new(?URI)),
+   Sock = socket(Uri, {'PUT', Uri, [{'Connection', 'keep-alive'}]}),
+   {http, Sock, {405, <<"Method Not Allowed">>, _Head, _Env}} = knet:recv(Sock),
+   {http, Sock, _} = knet:recv(Sock),
+   {http, Sock, eof} = knet:recv(Sock).
+
+
+%%%----------------------------------------------------------------------------   
+%%%
+%%% private
+%%%
+%%%----------------------------------------------------------------------------   
+
+socket(Uri, {_, _, _} = Request) ->
+   Sock = knet:socket(Uri),
+   _    = knet:send(Sock, Request),
+   {ioctl, b, Sock} = knet:recv(Sock),
+   Sock.
