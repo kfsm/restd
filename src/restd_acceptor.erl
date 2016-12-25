@@ -313,10 +313,10 @@ is_access_authorized(#rest{mthd = Mthd, uri = Uri} = Rest) ->
    case f(Rest, authorize, Mthd) of
       ok ->
          {ok, Rest};
-      forbidden ->
-         {error, {forbidden, scalar:s(Uri)}};
-      _  ->
-         {error, {unauthorized, scalar:s(Uri)}}
+      {error, forbidden} ->
+         {error, {forbidden, uri:s(Uri)}};
+      {error, _}  ->
+         {error, {unauthorized, uri:s(Uri)}}
    end.
 
 %%

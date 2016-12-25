@@ -1,7 +1,7 @@
 %%
 %% @doc
 %%   rest api test module
--module(restd_restapi_a).
+-module(restd_restapi_test).
 
 -export([
    allowed_methods/1,
@@ -19,7 +19,7 @@ content_provided(_Req) ->
    [{text, plain}].
 
 %%
-'GET'({{text, plain}, _}, _, {_Url, _Heads, _Env}) ->
+'GET'({{text, plain}, _}, _, {_Url, _Head, _Env}) ->
    {ok, [], <<"restd">>}.
 
 %%

@@ -13,7 +13,8 @@
 ]).
 
 -export([
-   restd_get_ok/1, restd_not_available/1, restd_not_implemented/1, restd_not_allowed/1
+   restd_get_ok/1, restd_not_available/1, restd_not_implemented/1, restd_not_allowed/1,
+   restd_authorized/1, restd_forbidden/1, restd_not_authorized/1
 ]).
 
 %%%----------------------------------------------------------------------------   
@@ -29,7 +30,8 @@ all() ->
 groups() ->
    [
       {restapi, [parallel], 
-         [restd_get_ok, restd_not_available, restd_not_implemented, restd_not_allowed]}
+         [restd_get_ok, restd_not_available, restd_not_implemented, restd_not_allowed,
+         restd_authorized, restd_forbidden, restd_not_authorized]}
    ].
 
 %%%----------------------------------------------------------------------------   
@@ -60,7 +62,8 @@ restapi() ->
       {port,    "http://*:8888"},
       {backlog, 1024},
       {route, [
-         {"/test/a",  restd_restapi_a}
+         {"/test/a",     restd_restapi_test},
+         {"/test/auth",  restd_restapi_auth}
       ]}
    ]),
    erlang:unlink(Pid).
@@ -102,6 +105,26 @@ restd_not_allowed(_) ->
    {http, Sock, _} = knet:recv(Sock),
    {http, Sock, eof} = knet:recv(Sock).
 
+restd_authorized(_) ->
+   Uri  = uri:path(<<"/test/auth">>, uri:new(?URI)),
+   Sock = socket(Uri, {'GET', Uri, [{'Connection', 'keep-alive'}, {<<"Authorization">>, <<"private">>}]}),
+   {http, Sock, {200, <<"OK">>, _Head, _Env}} = knet:recv(Sock),
+   {http, Sock, <<"restd">>} = knet:recv(Sock),
+   {http, Sock, eof} = knet:recv(Sock).
+
+restd_forbidden(_) ->
+   Uri  = uri:path(<<"/test/auth">>, uri:new(?URI)),
+   Sock = socket(Uri, {'GET', Uri, [{'Connection', 'keep-alive'}, {<<"Authorization">>, <<"public">>}]}),
+   {http, Sock, {403, <<"Forbidden">>, _Head, _Env}} = knet:recv(Sock),
+   {http, Sock, _} = knet:recv(Sock),
+   {http, Sock, eof} = knet:recv(Sock).
+
+restd_not_authorized(_) ->
+   Uri  = uri:path(<<"/test/auth">>, uri:new(?URI)),
+   Sock = socket(Uri, {'GET', Uri, [{'Connection', 'keep-alive'}]}),
+   {http, Sock, {401, <<"Unauthorized">>, _Head, _Env}} = knet:recv(Sock),
+   {http, Sock, _} = knet:recv(Sock),
+   {http, Sock, eof} = knet:recv(Sock).
 
 %%%----------------------------------------------------------------------------   
 %%%
