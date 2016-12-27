@@ -6,6 +6,7 @@
 -export([
    allowed_methods/1,
    content_provided/1,
+   cors/1,
    'GET'/3,
    'PUT'/3
 ]).
@@ -17,6 +18,10 @@ allowed_methods(_Req) ->
 %%
 content_provided(_Req) ->
    [{text, plain}].
+
+%%
+cors(_Req) ->
+   [{'Access-Control-Allow-Methods', <<"GET">>}].
 
 %%
 'GET'({{text, plain}, _}, _, {_Url, _Head, _Env}) ->

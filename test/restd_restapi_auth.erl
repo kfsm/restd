@@ -19,7 +19,6 @@ content_provided(_Req) ->
    [{text, plain}].
 
 authorize('GET', {_Url, Head, _}) ->
-io:format("~p~n", [Head]),
    case lens:get(lens:pair('Authorization', undefined), Head) of
       <<"private">> -> 
          ok;
