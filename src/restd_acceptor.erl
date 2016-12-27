@@ -56,7 +56,8 @@
   ,export = undefined :: _               %% resource exports
   ,mthd   = undefined :: _
   ,uri    = undefined :: uri:uri()
-  ,head   = undefined :: _
+  ,inhead = undefined :: _               %% ingress http headers
+  ,eghead = undefined :: _               %% egress http headers
   ,env    = undefined :: _
 }).
 
@@ -135,7 +136,7 @@ free(_Reason, _State) ->
          pipe:a(Pipe, Error);
 
       ?XOR_L({Code, _} = Error) ->
-         {ok, Http} = packetize({application, json}, {Code, jsx:encode([Error])}),
+         {ok, Http} = packetize([{'Content-Type', {application, json}}], {Code, jsx:encode([Error])}),
          lists:foreach(pipe:a(Pipe, _), Http)         
    end,
    {next_state, 'ACCEPT', #idle{route = Route}};      
@@ -169,9 +170,9 @@ free(_Reason, _State) ->
 'WEBSOCK'({ws, _, {terminated, _}}, _Pipe, State) ->
    {stop, normal, State};
 
-'WEBSOCK'({ws, _, Msg}, Pipe, #rest{mod = Mod, head = Head, env = Env} = State) ->
-   EgType = opts:val('Accept', Env),
-   InType = opts:val('Content-Type', undefined, Head),
+'WEBSOCK'({ws, _, Msg}, Pipe, #rest{mod = Mod, inhead = InHead, eghead = EgHead} = State) ->
+   EgType = opts:val('Content-Type', EgHead),
+   InType = opts:val('Content-Type', undefined, InHead),
    case Mod:recv({EgType, InType}, Msg, req(State)) of
       ok ->
          {next_state, 'WEBSOCK', State};
@@ -180,9 +181,9 @@ free(_Reason, _State) ->
          {next_state, 'WEBSOCK', State}
    end;
 
-'WEBSOCK'(Msg, Pipe, #rest{mod = Mod, head = Head, env = Env} = State) ->
-   EgType = opts:val('Accept', Env),
-   InType = opts:val('Content-Type', undefined, Head),
+'WEBSOCK'(Msg, Pipe, #rest{mod = Mod, inhead = InHead, eghead = EgHead} = State) ->
+   EgType = opts:val('Content-Type', EgHead),
+   InType = opts:val('Content-Type', undefined, InHead),
    case Mod:send({EgType, InType}, Msg, req(State)) of
       ok ->
          {next_state, 'WEBSOCK', State};
@@ -276,7 +277,7 @@ resource(#http{route = Route, uri = Uri, env = LEnv}) ->
    end.
 
 resource(#rest{} = Rest, #http{mthd = Mthd, uri = Uri, head = Head}) ->
-   {ok, Rest#rest{mthd = Mthd, uri = Uri, head = Head}}.
+   {ok, Rest#rest{mthd = Mthd, uri = Uri, inhead = orddict:from_list(Head), eghead = []}}.
 
 
 %%
@@ -323,23 +324,27 @@ is_access_authorized(#rest{mthd = Mthd, uri = Uri} = Rest) ->
 %%
 -spec is_cors_allowed(#rest{}) -> {ok, #rest{}} | {error, {unsupported, _}}.
 
-is_cors_allowed(#rest{head = Head} = Rest) ->
-   case lists:keyfind(<<"Origin">>, 1, Head) of
+is_cors_allowed(#rest{inhead = InHead, eghead = EgHead} = Rest) ->
+   case orddict:find(<<"Origin">>, InHead) of
       %% this is not a CORS request 
-      false ->
+      error ->
          {ok, Rest};
 
       {_, Origin} ->
-         CORS = f(Rest, cors),
-         {ok, Rest#rest{head = [{'Access-Control-Allow-Origin', Origin}|CORS] ++ Head}}
+         Head = lists:foldl(
+            fun({Key, Val}, Acc) -> orddict:store(Key, Val, Acc) end,
+            orddict:store('Access-Control-Allow-Origin', Origin, EgHead),
+            f(Rest, cors)
+         ),
+         {ok, Rest#rest{eghead = Head}}
    end.
 
 %%
 %%
 -spec is_content_supported(#rest{}) -> {ok, #rest{}} | {error, {unsupported, _}}.
 
-is_content_supported(#rest{head = Head} = Rest) ->
-   case opts:val('Content-Type', undefined, Head) of
+is_content_supported(#rest{inhead = InHead} = Rest) ->
+   case opts:val('Content-Type', undefined, InHead) of
       undefined -> 
          {ok, Rest};
 
@@ -357,14 +362,15 @@ is_content_supported(#rest{head = Head} = Rest) ->
 %%
 -spec is_content_acceptable(#rest{}) -> {ok, #rest{}} | {error, {not_acceptable, _}}.
 
-is_content_acceptable(#rest{head = Head, env = Env} = Rest) ->
+is_content_acceptable(#rest{inhead = Head, eghead = EgHead} = Rest) ->
    Provide = f(Rest, content_provided),
    Accept  = opts:val('Accept', [{'*', '*'}], Head),
    case
       lists:flatmap(restd:negotiate(_, Provide), Accept)
    of
       [{_, _} = Type | _] ->
-         {ok, Rest#rest{env = [{'Accept', Type}|Env]}};
+         % handle content negotiation and preset content type accepted by client 
+         {ok, Rest#rest{eghead = orddict:store('Content-Type', Type, EgHead)}};
       _ ->
          {error, {not_acceptable, [mimetype(X) || X <- Accept]}}
    end.
@@ -396,8 +402,8 @@ is_encoding_acceptable(#rest{} = Rest) ->
 %%
 -spec is_resource_exists(#rest{}) -> {ok, #rest{}} | {error, {not_found, _}}.
 
-is_resource_exists(#rest{uri = Uri, env = Env} = Rest) ->
-   {_, Accept} = lists:keyfind('Accept', 1, Env),
+is_resource_exists(#rest{uri = Uri, eghead = EgHead} = Rest) ->
+   Accept = orddict:fetch('Content-Type', EgHead),
    case f(Rest, exists, Accept) of
       true ->
          {ok, Rest};
@@ -423,64 +429,65 @@ is_modified(#rest{} = Rest) ->
 %%
 -spec execute(#rest{}, _) -> {ok, {_, _, _}} | {error, {atom(), _}}.
 
-execute(#rest{mthd = Mthd, head = Head, env = Env} = Rest, Entity) ->
-   EgType = opts:val('Accept', Env),
-   InType = opts:val('Content-Type', undefined, Head),
+execute(#rest{mthd = Mthd, inhead = InHead, eghead = EgHead} = Rest, Entity) ->
+   EgType = opts:val('Content-Type', EgHead),
+   InType = opts:val('Content-Type', undefined, InHead),
    % REST call returns either Http Type or Xor 
    case f(Rest, Mthd, {EgType, InType}, Entity) of
       ?XOR_R(Http) ->
-         packetize(EgType, Http);
+         packetize(EgHead, Http);
       ?XOR_L(Reason) ->
          {error, fail(Rest, Reason)};
       Http -> 
-         packetize(EgType, Http)
+         packetize(EgHead, Http)
    end.
 
-packetize(Type, {Code, Head0, Entity}) 
+packetize(EgHead, {Code, Head0, Entity}) 
  when is_binary(Entity) ->
-   Head1 = [$.|| 
-      add_head('Content-Type', Type, Head0), 
-      add_head('Content-Length', size(Entity), _)
-   ],
+   Head1 = orddict:merge(
+      fun(_, _, X) -> X end,
+      orddict:store('Content-Length', size(Entity), EgHead),
+      orddict:from_list(Head0)
+   ),
    {ok, [{Code, Head1, Entity}]};
 
-packetize(Type, {Code, Head0, Entity})
+packetize(EgHead, {Code, Head0, Entity})
  when is_list(Entity) ->
    case lists:keyfind('Content-Length', 1, Head0) of
       false ->
-         Head1 = [$.||
-            add_head('Content-Type', Type, Head0),
-            add_head('Transfer-Encoding', <<"chunked">>, _) 
-         ],
-         {ok, [{Code, Head1}|Entity] ++ [<<>>]};
+         Head1 = orddict:merge(
+            fun(_, _, X) -> X end,
+            orddict:store('Content-Length', size(Entity), EgHead),
+            orddict:from_list(Head0)
+         ),
+         Head2 = orddict:store('Transfer-Encoding', <<"chunked">>, Head1),
+         {ok, [{Code, Head2}|Entity] ++ [<<>>]};
       _ ->
-         Head1 = add_head('Content-Type', Type, Head0),
+         Head1 = orddict:merge(
+            fun(_, _, X) -> X end,
+            EgHead,
+            orddict:from_list(Head0)
+         ),
          {ok, [{Code, Head1, Entity}]}
    end;
 
-packetize(Type, {Code, Head0, {s, _, _} = Entity}) ->
-   Head1 = [$.||
-      add_head('Content-Type', Type, Head0),
-      add_head('Transfer-Encoding', <<"chunked">>, _) 
-   ],
+packetize(EgHead, {Code, Head0, {s, _, _} = Entity}) ->
+   Head1 = orddict:merge(
+      fun(_, _, X) -> X end,
+      orddict:store('Transfer-Encoding',  <<"chunked">>, EgHead),
+      orddict:from_list(Head0)
+   ),
    {ok, stream:'++'(stream:new({Code, Head1}), Entity)};
 
-packetize(Type, {Code, Entity}) ->
-   packetize(Type, {Code, [], Entity});
+packetize(EgHead, {Code, Entity}) ->
+   packetize(EgHead, {Code, [], Entity});
 
-packetize(Type, Code)
+packetize(EgHead, Code)
  when is_atom(Code) orelse is_integer(Code) ->
-   packetize(Type, {Code, [], <<>>});
+   packetize(EgHead, {Code, [], <<>>});
 
-packetize(Type, Entity) ->
-   packetize(Type, {ok, [], Entity}).
-
-
-add_head(Head, Value, Heads) ->
-   case lists:keyfind(Head, 1, Heads) of
-      false -> [{Head, Value}|Heads];
-      _     -> Heads
-   end. 
+packetize(EgHead, Entity) ->
+   packetize(EgHead, {ok, [], Entity}).
 
 
 %%%------------------------------------------------------------------
@@ -526,7 +533,7 @@ fail(Reason) ->
 
 %%
 %% build a resource context 
-req(#rest{uri = Url, head = Head, env = Env}) ->
+req(#rest{uri = Url, inhead = Head, env = Env}) ->
    {Url, Head, Env}.
 
 %%
