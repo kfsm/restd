@@ -351,10 +351,10 @@ is_content_supported(#rest{inhead = InHead} = Rest) ->
       Type ->
          Accept = f(Rest, content_accepted),
          case restd:negotiate(Type, Accept) of
+            [{_, _} = NType | _] ->
+               {ok, Rest#rest{inhead = orddict:store('Content-Type', NType, InHead)}};
             [] ->
-               {error, {unsupported, mimetype(Type)}};
-            _  ->
-               {ok, Rest}
+               {error, {unsupported, mimetype(Type)}}
          end
    end.
 
@@ -457,7 +457,7 @@ packetize(EgHead, {Code, Head0, Entity})
       false ->
          Head1 = orddict:merge(
             fun(_, _, X) -> X end,
-            orddict:store('Content-Length', size(Entity), EgHead),
+            orddict:store('Content-Length', iolist_size(Entity), EgHead),
             orddict:from_list(Head0)
          ),
          Head2 = orddict:store('Transfer-Encoding', <<"chunked">>, Head1),
