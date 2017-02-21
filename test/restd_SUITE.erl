@@ -106,7 +106,9 @@ restd_not_implemented(_) ->
 
 restd_not_allowed(_) ->
    Uri  = uri:path(<<"/test/a">>, uri:new(?URI)),
-   Sock = socket(Uri, {'PUT', Uri, [{'Connection', 'keep-alive'}]}),
+   Sock = socket(Uri, {'PUT', Uri, [{'Connection', 'keep-alive'}, {'Transfer-Encoding', <<"chunked">>}]}),
+   knet:send(Sock, <<"abcdef">>),
+   knet:send(Sock, eof),
    {http, Sock, {405, <<"Method Not Allowed">>, _Head, _Env}} = knet:recv(Sock),
    {http, Sock, _} = knet:recv(Sock),
    {http, Sock, eof} = knet:recv(Sock).
