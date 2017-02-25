@@ -55,5 +55,6 @@ listen(Uri, Service, Opts) ->
       {acceptor, {restd_acceptor, [Service]}}
      ,opts:get(pool,    10, Opts)
      ,opts:get(backlog, 25, Opts)
+     ,nopipe
      | Sock
    ]).
