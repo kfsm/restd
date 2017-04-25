@@ -116,7 +116,10 @@ free(_Reason, _State) ->
          env   = Env,
          q     = deq:new()
       }
-   }.
+   };
+
+'ACCEPT'({sidedown, _, _}, _Pipe, State) ->
+   {stop, normal, State}.
 
 %%%------------------------------------------------------------------
 %%%
