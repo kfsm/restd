@@ -317,6 +317,8 @@ is_access_authorized(#rest{mthd = Mthd, uri = Uri} = Rest) ->
    case f(Rest, authorize, Mthd) of
       ok ->
          {ok, Rest};
+      {ok, _} ->
+         {ok, Rest};
       {error, forbidden} ->
          {error, {forbidden, uri:s(Uri)}};
       {error, _}  ->
