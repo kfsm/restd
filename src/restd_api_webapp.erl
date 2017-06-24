@@ -73,7 +73,7 @@ sendfile(Url, Env, Content) ->
 filename(Url, Env) ->
    case opts:val(<<"file">>, undefined, Env) of
       undefined ->
-         filename:join([htdoc(Env), path(Env)| file(Url)]);
+         filename:join([htdoc(Env), path(Env)| file(Url, Env)]);
       File ->
          filename:join([htdoc(Env), path(Env), hd(segments([scalar:s(File)]))])
    end.
@@ -110,10 +110,10 @@ segments(Segments) ->
 
 %%
 %%
-file(Url) ->
+file(Url, Env) ->
    case uri:segments(Url) of
-      undefined -> [<<"index.html">>];
-      []        -> [<<"index.html">>];
+      undefined -> [ opts:val(file, <<"index.html">>, Env) ];
+      []        -> [ opts:val(file, <<"index.html">>, Env) ];
       Segments  -> segments(Segments)
    end.
 
