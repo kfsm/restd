@@ -25,6 +25,7 @@
 -export([start/0]).
 -export([start_link/2]).
 -export([
+   host/0,
    routes/2,
    return/5,
    negotiate/2
@@ -104,6 +105,13 @@ behaviour_info(_) ->
 %% start application
 start() -> 
    applib:boot(?MODULE, []).
+
+%%
+%%
+-spec host() -> uri:uri().
+
+host() ->
+   uri:new(opts:val(host, restd)).
 
 %%
 %% start service

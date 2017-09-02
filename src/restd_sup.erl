@@ -41,8 +41,16 @@ init([]) ->
             fun({Service, Opts}) ->
                 ?CHILD(supervisor, Service, restd_service_sup, [Service, Opts])
             end,
-            proplists:delete(included_applications, application:get_all_env())
+            lists:filter(
+               fun({Key, _}) -> 
+                  Key =/= included_applications andalso Key =/= host 
+               end,
+               application:get_all_env()
+            )
          )
       }
    }.
+
+
+
 
