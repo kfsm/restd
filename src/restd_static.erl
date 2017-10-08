@@ -29,15 +29,13 @@
 %% returns static file
 %%
 reader(Pattern, Root) ->
-   fun(Req) ->
-      [either ||
-         Path <- restd:path(Pattern, Req),
-         restd:method('GET', Req),
-         File <- filename(Root, Path),
-         readfile(File),
-         sendfile(File, _)
-      ]
-   end.
+   [pattern ||
+      Path /= restd:path(Pattern),
+         _ /= restd:method('GET'),
+      File <- filename(Root, Path),
+      readfile(File),
+      sendfile(File, _)
+   ].
 
 %%
 %%
@@ -90,82 +88,4 @@ content_type(<<".svg">>)   -> <<"image/svg+xml">>;
 content_type(<<".pdf">>)   -> <<"application/pdf">>;
 
 content_type(_)            -> <<"application/octet-stream">>.
-
-
-
-% %%
-% %%
-% filename(Url, Env) ->
-%    case opts:val(<<"file">>, opts:val(file, undefined, Env), Env) of
-%       undefined ->
-%          filename:join([htdoc(Env), path(Env)| file(Url)]);
-%       File ->
-%          filename:join([htdoc(Env), path(Env), hd(segments([scalar:s(File)]))])
-%    end.
-
-% %%
-% %% 
-% htdoc(Env) ->
-%    case opts:val(htdoc, Env) of
-%       X when is_atom(X) -> 
-%          case code:priv_dir(X) of
-%             {error,bad_name} -> 
-%                filename:join([priv, htdoc]);
-%             Root -> 
-%                filename:join([Root, htdoc])
-%          end;
-%       X when is_list(X) ->
-%          X 
-%    end.
-
-% %%
-% %%
-% path(Env) ->
-%    case opts:val(path, undefined, Env) of
-%       undefined ->
-%          <<>>;
-%       Path ->
-%          Path
-%    end.
-
-
-
-
-
-
-% allowed_methods(_Req) ->
-%    ['GET'].
-
-% %%
-% %%
-% content_provided(_Req) ->
-%    [{'*', '*'}].
-
-% %%
-% %%
-% cors(_Req) ->
-%    [
-%       {'Access-Control-Allow-Origin', <<"*">>}
-%      ,{'Access-Control-Allow-Methods', <<"GET">>}
-%      ,{'Access-Control-Max-Age', 86400}
-%    ].
-
-% %%
-% %%
-% exists(_, {Url, _Heads, Env}) ->
-%    filelib:is_file(filename(Url, Env)).
-
-% %%
-% %%
-% 'GET'(_Type, _Msg, {Url, _Heads, Env}) ->
-%    [$^||
-%       readfile(Url, Env),
-%       sendfile(Url, Env, _)
-%    ].
-
-
-      
-
-
-
 

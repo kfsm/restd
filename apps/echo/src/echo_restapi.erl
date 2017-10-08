@@ -5,121 +5,121 @@
 -compile({parse_transform, category}).
 
 -export([
-   ipaddr_json/1,
-   ipaddr_text/1,
-   user_agent/1,
-   headers/1,
-   get/1,
-   post/1,
-   put/1,
-   patch/1,
-   delete/1,
-   utf8/1,
-   deflate/1,
-   gzip/1,
-   compress/1,
-   status_code/1,
-   response_header/1,
-   redirect_n/1,
-   cookies/1
+   ipaddr_json/0,
+   ipaddr_text/0,
+   user_agent/0,
+   headers/0,
+   get/0,
+   post/0,
+   put/0,
+   patch/0,
+   delete/0,
+   utf8/0,
+   deflate/0,
+   gzip/0,
+   compress/0,
+   status_code/0,
+   response_header/0,
+   redirect_n/0,
+   cookies/0
 ]).
 
 %%
 %% Returns Origin IP.
 %%
-ipaddr_json(Req) ->
-   [either ||
-      restd:path("/ip", Req),
-      restd:method('GET', Req),
-      restd:provided_content({application, json}, Req),
-      restd:header(<<"X-Knet-Peer">>, Req),
-      restd:to_json(#{ip => _})
+ipaddr_json() ->
+   [pattern ||
+      _ /= restd:path("/ip"),
+      _ /= restd:method('GET'),
+      _ /= restd:provided_content({application, json}),
+      Peer /= restd:header(<<"X-Knet-Peer">>),
+      restd:to_json(#{ip => Peer})
    ].
 
 
-ipaddr_text(Req) ->
-   [either ||
-      restd:path("/ip", Req),
-      restd:method('GET', Req),
-      restd:provided_content({text, plain}, Req),
-      restd:header(<<"X-Knet-Peer">>, Req),
-      restd:to_text(_)
+ipaddr_text() ->
+   [pattern ||
+      _ /= restd:path("/ip"),
+      _ /= restd:method('GET'),
+      _ /= restd:provided_content({text, plain}),
+      Peer /= restd:header(<<"X-Knet-Peer">>),
+      restd:to_text(Peer)
    ].
 
 
 %%
 %% Returns user-agent.
 %%
-user_agent(Req) ->
-   [either ||
-      restd:path("/user-agent", Req),
-      restd:header(<<"User-Agent">>, Req),
-      restd:to_json(#{'user-agent' => _})
+user_agent() ->
+   [pattern ||
+      _ /= restd:path("/user-agent"),
+      UA /= restd:header(<<"User-Agent">>),
+      restd:to_json(#{'user-agent' => UA})
    ].
 
 %%
 %% Returns header dict.
 %%
-headers(Req) ->
-   [either ||
-      restd:path("/headers", Req),
-      restd:method('GET', Req),
-      restd:provided_content({application, json}, Req),
-      restd:headers(Req),
-      restd:to_json(#{headers => _})
+headers() ->
+   [pattern ||
+      _ /= restd:path("/headers"),
+      _ /= restd:method('GET'),
+      _ /= restd:provided_content({application, json}),
+      Head /= restd:headers(),
+      restd:to_json(#{headers => Head})
    ].
 
 %%
 %% Returns GET data.
 %%
-get(Req) ->
-   [either ||
-      Url  <- restd:url("/get", Req),
-      Mthd <- restd:method('GET', Req),
-      Head <- restd:headers(Req),
-      Peer <- restd:header(<<"X-Knet-Peer">>, Req),
+get() ->
+   [pattern ||
+      Url  /= restd:url("/get"),
+      Mthd /= restd:method('GET'),
+      Head /= restd:headers(),
+      Peer /= restd:header(<<"X-Knet-Peer">>),
       restd:to_json(#{headers => Head, peer => Peer, url => uri:s(Url), method => Mthd})
    ].
 
 %%
 %% Returns POST data.
 %% 
-post(Req) ->
-   [either ||
-      Url  <- restd:url("/post", Req),
-      Mthd <- restd:method('POST', Req),
-      Head <- restd:headers(Req),
-      Peer <- restd:header(<<"X-Knet-Peer">>, Req),
-      restd:accepted_content({'*', '*'}, Req),
-      Data <- restd:as_text(Req),
+post() ->
+   [pattern ||
+      Url  /= restd:url("/post"),
+      Mthd /= restd:method('POST'),
+      Head /= restd:headers(),
+      Peer /= restd:header(<<"X-Knet-Peer">>),
+         _ /= restd:accepted_content({'*', '*'}),
+      Data /= restd:as_text(),
       restd:to_json(#{headers => Head, peer => Peer, url => uri:s(Url), method => Mthd, data => Data})
    ].
 
 %%
 %% Returns PUT data.
 %% 
-put(Req) ->
-   [either ||
-      Url  <- restd:url("/put", Req),
-      Mthd <- restd:method('PUT', Req),
-      Head <- restd:headers(Req),
-      Peer <- restd:header(<<"X-Knet-Peer">>, Req),
-      restd:accepted_content({'*', '*'}, Req),
-      Data <- restd:as_text(Req),
+put() ->
+   [pattern ||
+      Url  /= restd:url("/put"),
+      Mthd /= restd:method('PUT'),
+      Head /= restd:headers(),
+      Peer /= restd:header(<<"X-Knet-Peer">>),
+         _ /= restd:accepted_content({'*', '*'}),
+      Data /= restd:as_text(),
       restd:to_json(#{headers => Head, peer => Peer, url => uri:s(Url), method => Mthd, data => Data})
    ].
 
 %%
 %% Returns PATCH data.
 %% 
-patch(Req) ->
-   [either ||
-      Url  <- restd:url("/patch", Req),
-      Mthd <- restd:method('PATCH', Req),
-      Head <- restd:headers(Req),
-      Peer <- restd:header(<<"X-Knet-Peer">>, Req),
-      restd:accepted_content({'*', '*'}, Req),
-      Data <- restd:as_text(Req),
+patch() ->
+   [pattern ||
+      Url  /= restd:url("/patch"),
+      Mthd /= restd:method('PATCH'),
+      Head /= restd:headers(),
+      Peer /= restd:header(<<"X-Knet-Peer">>),
+         _ /= restd:accepted_content({'*', '*'}),
+      Data <- restd:as_text(),
       restd:to_json(#{headers => Head, peer => Peer, url => uri:s(Url), method => Mthd, data => Data})
    ].
 
@@ -127,23 +127,23 @@ patch(Req) ->
 %%
 %% Returns DELETE data.
 %% 
-delete(Req) ->
-   [either ||
-      Url  <- restd:url("/delete", Req),
-      Mthd <- restd:method('DELETE', Req),
-      Head <- restd:headers(Req),
-      Peer <- restd:header(<<"X-Knet-Peer">>, Req),
-      restd:accepted_content({'*', '*'}, Req),
-      Data <- restd:as_text(Req),
+delete() ->
+   [pattern ||
+      Url  /= restd:url("/delete"),
+      Mthd /= restd:method('DELETE'),
+      Head /= restd:headers(),
+      Peer /= restd:header(<<"X-Knet-Peer">>),
+        _  /= restd:accepted_content({'*', '*'}),
+      Data <- restd:as_text(),
       restd:to_json(#{headers => Head, peer => Peer, url => uri:s(Url), method => Mthd, data => Data})
    ].
 
 %%
 %% Returns page containing UTF-8 data.
 %%
-utf8(Req) ->
-   [either ||
-      restd:path("/encoding/utf8", Req),
+utf8() ->
+   [pattern ||
+      _ /= restd:path("/encoding/utf8"),
       fmap({
          200, 
          [{<<"Content-Type">>, <<"text/html; charset=utf-8">>}],
@@ -158,41 +158,41 @@ utf8(Req) ->
 %%
 %% Return deflate-encoded data.
 %%
-deflate(Req) ->
-   [either ||
-      Url  <- restd:url("/encoding/deflate", Req),
-      Mthd <- restd:method('GET', Req),
-      Head <- restd:headers(Req),
-      Peer <- restd:header(<<"X-Knet-Peer">>, Req),
-      restd:provided_encoding(deflate, Req), 
-      restd:to_json([{<<"Content-Encoding">>, <<"deflate">>}],
+deflate() ->
+   [pattern ||
+      Url  /= restd:url("/encoding/deflate"),
+      Mthd /= restd:method('GET'),
+      Head /= restd:headers(),
+      Peer /= restd:header(<<"X-Knet-Peer">>),
+      Encoding /= restd:provided_encoding(deflate), 
+      restd:to_json([Encoding],
          #{headers => Head, peer => Peer, url => uri:s(Url), method => Mthd})
    ].
 
 %%
 %% Return gzip-encoded data.
 %%
-gzip(Req) ->
-   [either ||
-      Url  <- restd:url("/encoding/gzip", Req),
-      Mthd <- restd:method('GET', Req),
-      Head <- restd:headers(Req),
-      Peer <- restd:header(<<"X-Knet-Peer">>, Req),
-      restd:provided_encoding(gzip, Req), 
-      restd:to_json([{<<"Content-Encoding">>, <<"gzip">>}],
+gzip() ->
+   [pattern ||
+      Url  /= restd:url("/encoding/gzip"),
+      Mthd /= restd:method('GET'),
+      Head /= restd:headers(),
+      Peer /= restd:header(<<"X-Knet-Peer">>),
+      Encoding /= restd:provided_encoding(gzip), 
+      restd:to_json([Encoding],
          #{headers => Head, peer => Peer, url => uri:s(Url), method => Mthd})
    ].
 
 %%
 %% Negotiate compression protocol and return encoded data
 %%
-compress(Req) ->
-   [either ||
-      Url  <- restd:url("/encoding/compress", Req),
-      Mthd <- restd:method('GET', Req),
-      Head <- restd:headers(Req),
-      Peer <- restd:header(<<"X-Knet-Peer">>, Req),
-      Encoding <- restd:provided_encoding(Req), 
+compress() ->
+   [pattern ||
+      Url  /= restd:url("/encoding/compress"),
+      Mthd /= restd:method('GET'),
+      Head /= restd:headers(),
+      Peer /= restd:header(<<"X-Knet-Peer">>),
+      Encoding /= restd:provided_encoding(), 
       restd:to_json([Encoding],
          #{headers => Head, peer => Peer, url => uri:s(Url), method => Mthd})
    ].
@@ -200,10 +200,10 @@ compress(Req) ->
 %%
 %% Returns given HTTP Status code.
 %%
-status_code(Req) ->
-   [either ||
-      Path <- restd:path("/status/_", Req),
-      restd:method('GET', Req),
+status_code() ->
+   [pattern ||
+      Path /= restd:path("/status/_"),
+         _ /= restd:method('GET'),
       do_status_code(Path)
    ].
 
@@ -213,21 +213,22 @@ do_status_code([_, Code]) ->
 %%
 %% Return given response headers
 %%
-response_header(Req) ->
-   [either ||
-      restd:path("/response-header", Req),
-      restd:method('GET', Req),
-      Query <- restd:q(Req),
+response_header() ->
+   [pattern ||
+      _ /= restd:path("/response-headers"),
+      _ /= restd:method('GET'),
+      Query /= restd:q(),
+      fmap(io:format("==> ~p~n", [Query])),
       restd:to_json(Query, Query)
    ].
 
 %%
 %% 302 Redirects n times.
 %%
-redirect_n(Req) ->
-   [either ||
-      Path <- restd:path("/redirect/_", Req),
-      restd:method('GET', Req),
+redirect_n() ->
+   [pattern ||
+      Path /= restd:path("/redirect/_"),
+         _ /= restd:method('GET'),
       redirect(Path)
    ].
 
@@ -242,12 +243,12 @@ redirect([_, N]) ->
 %% Sets one or more simple cookies.
 %% Deletes one or more simple cookies.
 %%
-cookies(Req) ->
-   [either ||
-      Path <- restd:path("/cookies/*", Req),
-      restd:method('GET', Req),
-      Cookie <- restd:header(<<"Cookie">>, Req),
-      Values <- restd:q(Req),
+cookies() ->
+   [pattern ||
+      Path /= restd:path("/cookies/*"),
+         _ /= restd:method('GET'),
+      Cookie /= restd:header(<<"Cookie">>),
+      Values /= restd:q(),
       cookies(Path, Cookie, Values)
    ].
 
