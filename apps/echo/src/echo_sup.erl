@@ -44,5 +44,9 @@ endpoints() ->
       fun echo_restapi:gzip/1,
       fun echo_restapi:compress/1,
       fun echo_restapi:status_code/1,
-      fun echo_restapi:response_header/1
+      fun echo_restapi:response_header/1,
+      fun echo_restapi:redirect_n/1,
+      fun echo_restapi:cookies/1,
+      restd_static:reader("/", echo),
+      restd_static:reader("/_", echo)
    ].

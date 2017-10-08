@@ -14,19 +14,18 @@
 		<li><a href="/ip" data-bare-link="true"><code>/ip</code></a> Returns Origin IP.</li>
 		<li><a href="/user-agent" data-bare-link="true"><code>/user-agent</code></a> Returns user-agent.</li>
 		<li><a href="/headers" data-bare-link="true"><code>/headers</code></a> Returns header dict.</li>
-		<li><a href="/env/http" data-bare-link="true"><code>/env</code></a> Returns environment dict.</li>
 		<li><a href="/get" data-bare-link="true"><code>/get</code></a> Returns GET data.</li>
 		<li><code>/post</code> Returns POST data.</li>
-		<!--
 		<li><code>/put</code> Returns PUT data.</li>
 		<li><code>/patch</code> Returns PATCH data.</li>
 		<li><code>/delete</code> Returns DELETE data</li>
-		<li><a href="/gzip" data-bare-link="true"><code>/gzip</code></a> Returns gzip-encoded data.</li>
-		-->
+		<li><a href="/encoding/utf8" data-bare-link="true"><code>/encoding/utf8</code></a> Returns page containing UTF-8 data.</li>
+		<li><a href="/encoding/deflate" data-bare-link="true"><code>/encoding/deflate</code></a> Returns gzip-encoded data.</li>		
+		<li><a href="/encoding/gzip" data-bare-link="true"><code>/encoding/gzip</code></a> Returns gzip-encoded data.</li>
+		<li><a href="/encoding/compress" data-bare-link="true"><code>/encoding/compress</code></a> Returns compresses data, compression algorithm is negotiated.</li>		
 		<li><a href="/status/200"><code>/status/:code</code></a> Returns given HTTP Status code.</li>
 		<li><a href="/response-headers?Content-Type=text/plain;%20charset=UTF-8&Server=echo"><code>/response-headers?key=val</code></a> Returns given response headers.</li>
 		<li><a href="/redirect/6"><code>/redirect/:n</code></a> 302 Redirects <em>n</em> times.</li>
-		<li><a href="/redirect-to?url=http://example.com/"><code>/redirect-to?url=foo</code></a> 302 Redirects to the <em>foo</em> URL.</li>
 		<!--
 		<li><a href="/relative-redirect/6"><code>/relative-redirect/:n</code></a> 302 Relative redirects <em>n</em> times.</li>
 		-->

@@ -31,6 +31,8 @@
 -export([
    url/2,
    path/2,
+   q/1,
+   q/2,
    method/2,
    headers/1,
    header/2,
@@ -198,6 +200,30 @@ url(Path, #request{uri = Uri} = Request) ->
       path(Path, Request),
       fmap(Uri)
    ].
+
+%%
+%% matches url query
+q(#request{uri = Uri}) ->
+   case uri:q(Uri) of
+      undefined ->
+         {ok, []};
+      Value ->
+         {ok, Value}
+   end.
+
+q(Key, #request{} = Request) ->
+   [either ||
+      q(Request),
+      fmap(
+         case lens:get(lens:pair(Key, undefined), _) of 
+            undefined ->
+               {error, {badarg, Key}};
+            Value ->
+               {ok, Value}
+         end
+      )
+   ].
+
 
 %%
 %% matches request method

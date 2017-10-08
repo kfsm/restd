@@ -390,7 +390,7 @@ status_code(no_content) -> status_code(204);
 %status(206) -> <<"206 Partial Content">>;
 %status(300) -> <<"300 Multiple Choices">>;
 %status(301) -> <<"301 Moved Permanently">>;
-%status(found) -> <<"302 Found">>;
+status_code(redirect) -> status_code(302);
 %status(303) -> <<"303 See Other">>;
 %status(304) -> <<"304 Not Modified">>;
 %status(307) -> <<"307 Temporary Redirect">>;

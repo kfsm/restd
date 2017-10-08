@@ -19,7 +19,9 @@
    gzip/1,
    compress/1,
    status_code/1,
-   response_header/1
+   response_header/1,
+   redirect_n/1,
+   cookies/1
 ]).
 
 %%
@@ -213,11 +215,56 @@ do_status_code([_, Code]) ->
 %%
 response_header(Req) ->
    [either ||
-      Url <- restd:url("/response-header", Req),
+      restd:path("/response-header", Req),
       restd:method('GET', Req),
-      do_response_header(uri:q(Url))
+      Query <- restd:q(Req),
+      restd:to_json(Query, Query)
    ].
 
-do_response_header(Head) ->
-   restd:to_json(Head, Head).
+%%
+%% 302 Redirects n times.
+%%
+redirect_n(Req) ->
+   [either ||
+      Path <- restd:path("/redirect/_", Req),
+      restd:method('GET', Req),
+      redirect(Path)
+   ].
+
+redirect([_, <<"1">>]) ->
+   restd:to_text(redirect, [{<<"Location">>, <<"/get">>}], <<>>);
+
+redirect([_, N]) ->
+   restd:to_text(redirect, [{<<"Location">>, <<"/redirect/", (scalar:s(scalar:i(N) - 1))/binary>>}], <<>>).
+
+%%
+%% Returns cookie data.
+%% Sets one or more simple cookies.
+%% Deletes one or more simple cookies.
+%%
+cookies(Req) ->
+   [either ||
+      Path <- restd:path("/cookies/*", Req),
+      restd:method('GET', Req),
+      Cookie <- restd:header(<<"Cookie">>, Req),
+      Values <- restd:q(Req),
+      cookies(Path, Cookie, Values)
+   ].
+
+cookies([_], Cookies, _) ->
+   restd:to_json(#{cookies => Cookies});
+
+cookies([_, <<"set">>], _, Values) ->
+   Head = [set_cookie(Key, Val) || {Key, Val} <- Values],
+   restd:to_text(redirect, [{<<"Location">>, <<"/cookies">>} | Head], <<>>);
+
+cookies([_, <<"delete">>], _, Values) ->
+   Head = [set_cookie(Key) || Key <- Values],
+   restd:to_text(redirect, [{<<"Location">>, <<"/cookies">>} | Head], <<>>).
+
+set_cookie(Key, Val) ->
+   {<<"Set-Cookie">>, <<(scalar:s(Key))/binary, $=, (scalar:s(Val))/binary, $;, "Path=/">>}.
+
+set_cookie(Key) ->
+   {<<"Set-Cookie">>, <<(scalar:s(Key))/binary, $=, $;, "expires=Thu, 01-Jan-1970 00:00:00 GMT; Max-Age=0; Path=/">>}.
 
