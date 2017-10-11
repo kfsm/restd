@@ -38,17 +38,6 @@ init([]) ->
       {
          {one_for_one, 4, 1800},
          []
-         % lists:map(
-         %    fun({Service, Opts}) ->
-         %        ?CHILD(supervisor, Service, restd_service_sup, [Service, Opts])
-         %    end,
-         %    lists:filter(
-         %       fun({Key, _}) -> 
-         %          Key =/= included_applications andalso Key =/= host 
-         %       end,
-         %       application:get_all_env()
-         %    )
-         % )
       }
    }.
 

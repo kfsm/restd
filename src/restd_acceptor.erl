@@ -125,7 +125,7 @@ free(_Reason, _State) ->
 'HTTP'({http, _Uri, eof}, Pipe, #state{endpoints = Endpoints} = State) ->
    case execute_rest(State) of
       ?EITHER_R({s, _, _} = Http) ->
-         streams:foreach(pipe:a(Pipe, _), Http),
+         stream:foreach(pipe:a(Pipe, _), Http),
          {next_state, 'ACCEPT', #state{endpoints = Endpoints}};
 
       ?EITHER_R(Http) ->
@@ -212,7 +212,7 @@ execute_rest(#state{endpoints = Endpoints, request = Request, entity = Entity}) 
       ?EITHER_R(Http) ->
          packetize(Http);
       ?EITHER_L(Reasons) ->
-         packetize(fail(Reasons))
+         packetize(fail(Request, Reasons))
    end.
 
 %%
@@ -231,19 +231,42 @@ endpoints([], Reasons, #request{}) ->
 
 %%
 %% https://tools.ietf.org/html/rfc7807
-fail(Reasons) ->
-   {Code, Json} = failwith(hd(Reasons)),
+fail(#request{uri = Uri}, Reasons) ->
+   [Error | _] = lists:sort(
+      fun(A, B) -> 
+         fail_priority(A) =< fail_priority(B)
+      end,
+      Reasons
+   ),
+   {Code, Json} = failwith(Error, Uri),
    {Code, [{<<"Content-Type">>, <<"application/json">>}], jsx:encode(Json)}.
 
-failwith({Reason, Details}) ->
+failwith({Reason, Details}, Uri) ->
    {500, 
       #{
          type    => <<"http://example.org">>,
          title   => scalar:s(Reason),
          details => Details
       }
+   };
+
+failwith(Reason, Uri) ->
+   {500, 
+      #{
+         type    => <<"http://example.org">>,
+         title   => scalar:s(Reason),
+         details => uri:s(Uri)
+      }
    }.
 
+fail_priority({not_available, _}) -> 1000;
+fail_priority({not_allowed, _}) -> 990;
+fail_priority({not_acceptable, _}) -> 820;
+fail_priority({unsupported, _}) -> 800;
+fail_priority({unauthorized, _}) -> 520;
+fail_priority({forbidden, _}) -> 500;
+fail_priority({badarg, _}) -> 10;
+fail_priority(_) -> 1.
 
 
 

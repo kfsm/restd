@@ -15,19 +15,17 @@
 %%   See the License for the specific language governing permissions and
 %%   limitations under the License.
 %%
-%% @todo
-%%   * abstract routing table
-%%   * clean-up acceptor
 -module(restd).
-% -compile({parse_transform, partial}).
 -compile({parse_transform, category}).
 
 -include("restd.hrl").
 
--export([behaviour_info/1]).
 -export([start/0]).
--export([start_link/2, spec/2]).
-
+-export([
+   start_link/2, 
+   spec/2
+]).
+%% directives
 -export([
    url/2,
    path/2,
@@ -40,10 +38,13 @@
    provided_encoding/1,
    provided_encoding/2,
    accepted_content/2,
+   % accepted_langauge/2,
+   % accepted_charset/2,
+   % accepted_encoding/2,
    authorize/2,
    cors/1, 
    cors/2,
-
+   cors/3,
    to_json/1,
    to_json/2,
    to_json/3,
@@ -55,82 +56,25 @@
 ]).
 
 
--export([
-   host/0,
-   routes/2,
-   return/5,
-   negotiate/2
-]).
-
-
-%%%----------------------------------------------------------------------------   
-%%%
-%%% restd behavior interface
-%%%
-%%%----------------------------------------------------------------------------   
+-export_type([endpoint/0]).
 
 %%
-%% 
-behaviour_info(callbacks) ->
-   [
-      %%
-      %% return list of allowed methods 
-      %%
-      %% -spec(allowed_methods/0 :: (request()) -> [method()]).
-      %% {allowed_methods, 1}
+%% data types
+%%
+-type endpoint()  :: fun((request()) -> {ok, response()} | {error, _}).
 
-      %%
-      %% return list of content accepted by resource
-      %%
-      %% -spec(content_accepted/0 :: (request()) -> [mime()]).
-      %% {content_accepted, 1}
+-type request()   :: #request{}.
+-type response()  :: {code(), headers(), entity()}.
 
-      %%
-      %% return list of provided content by resource
-      %%
-      %% -spec(content_provided/0 :: (request()) -> [mime()]).
-      %% {content_provided, 1}
+-type code()      :: integer().
+-type header()    :: {binary(), _}.
+-type headers()   :: [header()].
+-type entity()    :: binary() | datum:stream().
+-type method()    :: atom().
+-type mimetype()  :: {_, _}.
 
-      %%
-      %% check if resource exists
-      %%
-      %% -spec(exists/2 :: (mime(), request()) -> true | false).
-      %% {exists, 2}
-      
-      %%
-      %% authorize request
-      %%
-      %% -spec(authorize/2 :: (method(), request()) -> ok | any()).
-      %% {authorize, 2}
+-type opts()      :: [_].
 
-      %%
-      %% define cors policy
-      %%
-      %% -spec(cors/1 :: (request()) -> [header()])
-
-      %%
-      %% stream
-      %%
-      %% -spec(stream/? :: (...) -> ?).
-      %% {stream,   ?}
-
-      %%
-      %% http method handler
-      %%
-      %% -spec(xxx/2 :: (mime(), request()) -> response()).
-      %% -spec(xxx/3 :: (mime(), request(), binary()) -> response()).
-      %% {xxx,      2}
-      %% {xxx,      3}
-   ];
-behaviour_info(_) ->
-   undefined.
-
-
-%%%----------------------------------------------------------------------------   
-%%%
-%%% application interface
-%%%
-%%%----------------------------------------------------------------------------   
 
 %%
 %% start application
@@ -138,21 +82,14 @@ start() ->
    applib:boot(?MODULE, []).
 
 %%
-%%
--spec host() -> uri:uri().
-
-host() ->
-   uri:new(opts:val(host, restd)).
-
-%%
 %% start rest service
--spec start_link(atom(), [_]) -> {ok, pid()} | {error, any()}.
+-spec start_link([endpoint()], opts()) -> {ok, pid()} | {error, _}.
 
 start_link(Routes, Opts) ->
-	restd_service_sup:start_link(Routes, Opts).
+   restd_service_sup:start_link(Routes, Opts).
 
 %%
-%% 
+%% return a supervisor specification of services
 -spec spec(_, _) -> _.
 
 spec(Routes, Opts) ->
@@ -165,12 +102,14 @@ spec(Routes, Opts) ->
 
 %%%----------------------------------------------------------------------------   
 %%%
-%%% pattern matches
+%%% pattern match interface
 %%%
 %%%----------------------------------------------------------------------------   
 
 %%
 %% matches path segements
+-spec path(uri:path(), request()) -> datum:either( uri:segments() ).
+
 path(Path, #request{uri = Uri}) ->
    path(
       uri:segments(uri:path(Path, Uri)), 
@@ -195,6 +134,8 @@ path(_, _, Uri) ->
    
 %%
 %% matches path segments and return url
+-spec url(uri:path(), request()) -> datum:either( uri:uri() ).
+
 url(Path, #request{uri = Uri} = Request) ->
    [either ||
       path(Path, Request),
@@ -202,7 +143,10 @@ url(Path, #request{uri = Uri} = Request) ->
    ].
 
 %%
-%% matches url query
+%% matches whole url's query or individual key
+-spec q(request()) -> datum:either( uri:params() ).
+-spec q(binary() | list(), request()) -> datum:either( binary() ).  
+
 q(#request{uri = Uri}) ->
    case uri:q(Uri) of
       undefined ->
@@ -227,18 +171,26 @@ q(Key, #request{} = Request) ->
 
 %%
 %% matches request method
+-spec method(method(), request()) -> datum:either( method() ).
+
 method(Mthd, #request{mthd = Mthd}) ->
    {ok, Mthd};
 method(_, #request{mthd = Mthd}) ->
    {error, {not_allowed, Mthd}}.
 
+
 %%
-%%
+%% matches request headers
+-spec headers(request()) -> datum:either( headers() ).
+
 headers(#request{head = Headers}) ->
    {ok, Headers}.
 
+
 %%
-%%
+%% matches request header
+-spec header(binary() | list(), request()) -> datum:either( header() ).
+
 header(Head, #request{head = Headers}) ->
    case lens:get(lens:pair(scalar:s(Head), undefined), Headers) of
       undefined ->
@@ -249,6 +201,8 @@ header(Head, #request{head = Headers}) ->
 
 %%
 %% match request of supported content type
+-spec provided_content(mimetype(), request()) -> datum:either( header() ).
+
 provided_content({_, _} = Provide, #request{} = Request) ->
    [either ||
       Head <- header(<<"Accept">>, Request),
@@ -263,7 +217,10 @@ return_provided_content(_, Accept) ->
    {error, {not_acceptable, Accept}}.
 
 %%
-%%
+%% match request of supported content encoding
+-spec provided_encoding(request()) -> datum:either( header() ).
+-spec provided_encoding(_, request()) -> datum:either( header() ).
+
 provided_encoding(#request{} = Request) ->
    [either ||
       Head <- header(<<"Accept-Encoding">>, Request),
@@ -279,13 +236,15 @@ provided_encoding(Encoding, #request{} = Request) ->
       return_provided_encoding(_, Head)
    ].
 
-return_provided_encoding([Encoding | _], Head) ->
+return_provided_encoding([Encoding | _], _) ->
    {ok, {<<"Content-Encoding">>, Encoding}};
 return_provided_encoding(_, Encoding) ->
    {error, {not_acceptable, Encoding}}.
 
 %%
 %% match request of acceptable content type
+-spec accepted_content(mimetype(), request()) -> datum:either( mimetype() ).
+
 accepted_content({_, _} = Accept, #request{} = Request) ->
    [either ||
       Head <- header(<<"Content-Type">>, Request),
@@ -299,66 +258,86 @@ return_accepted_content([{_, _} = Type | _], _) ->
 return_accepted_content(_, ContentType) ->
    {error, {unsupported, ContentType}}.
 
-
-   % Content = lens:get(htstream:http_content_type(), Head),
-   % case
-   %    restd:negotiate(Content, [Accept])
-   % of
-   %    [{_, _} = Type | _] ->
-   %       {ok, Type};
-   %    _ ->
-   %       {error, {unsupported, mimetype(Content)}}
-   % end.
+%%
+%%
+%%accepted_langauge(_, _) -> ok.
 
 %%
 %%
+%%accepted_charset(_, _) -> ok.
+
+%%
+%%
+%%accepted_encoding(_, _) -> ok.
+
+
+%%
+%% match request against Authorization header and executes a token validation
+-spec authorize(fun((_) -> datum:either(_)), request()) -> datum:either(_).
+
 authorize(Authorize, #request{mthd = Mthd, uri = Uri, head = Head}) ->
-   case lens:get(htstream:http_authorization(), Head) of
+   case lens:get(lens:pair(<<"Authorization">>, undefined), Head) of
       undefined ->
          {error, {unauthorized, uri:s(Uri)}};
       Token ->
-         Authorize(Token, {Mthd, Uri, Head})
+         case Authorize(Token, {Mthd, Uri, Head}) of
+            {error, forbidden} -> 
+               {error, {forbidden, uri:s(Uri)}};
+            {error, _} -> 
+               {error, {unauthorized, uri:s(Uri)}};
+            {ok, _} = Value ->
+               Value
+         end
    end.
 
 %%
-%%
+%% match request and returns CORS headers
+-spec cors(request()) -> datum:either( headers() ).
+-spec cors(headers(), request()) -> datum:either( headers() ).
+-spec cors(_, headers(), request()) -> datum:either( headers() ).
+
 cors(Request) ->
-   cors([
+   cors(default_cors(), Request).
+
+cors(Policy, #request{head = Head}) ->
+   case lens:get(lens:pair(<<"Origin">>, undefined), Head) of
+      undefined ->
+         {ok, []};
+      Origin ->
+         {ok, [{<<"Access-Control-Allow-Origin">>, Origin} | Policy]}
+   end.
+
+cors(Origin, Policy, #request{head = Head}) ->
+   case lens:get(lens:pair(<<"Origin">>, undefined), Head) of
+      {_, Origin} ->
+         {ok, [{<<"Access-Control-Allow-Origin">>, Origin} | Policy]};
+      Other ->
+         {error, {not_allowed, scalar:s(Other)}}
+   end.
+
+default_cors() ->
+   [
       {<<"Access-Control-Allow-Methods">>, <<"GET, PUT, POST, DELETE, OPTIONS">>}
      ,{<<"Access-Control-Allow-Headers">>, <<"Content-Type">>}
-     ,{<<"Access-Control-Max-Age">>, 600}
-   ], Request).
-
-cors(CORS, Request) -> ok.
+     ,{<<"Access-Control-Max-Age">>,       600}
+   ].
 
 %%
 %%
-accepted_langauge(_, _) -> ok.
+%%is_resource_exists(_, _) -> ok.
 
 %%
 %%
-accepted_charset(_, _) -> ok.
+%%is_etags_matched(_, _) -> ok.
 
 %%
 %%
-accepted_encoding(_, _) -> ok.
-
-%%
-%%
-is_resource_exists(_, _) -> ok.
-
-%%
-%%
-is_etags_matched(_, _) -> ok.
-
-%%
-%%
-is_modified(_, _) -> ok.
+%%is_modified(_, _) -> ok.
 
 
 %%
-%%
--spec to_json(_) -> {_, _, _}.
+%% encode result as json
+-spec to_json(_) -> response().
 
 to_json(Json) ->
    to_json([], Json).
@@ -372,17 +351,21 @@ to_json(Code, Head, Json) ->
    }.
 
 %%
-%%
--spec as_json(_) -> _.
+%% decode payload as json
+-spec as_json(request()) -> _.
 
 as_json(#request{entity = Entity}) ->
-   {ok, 
-      jsx:decode(Entity, [return_maps])
-   }.
+   try
+      {ok, 
+         jsx:decode(erlang:iolist_to_binary(Entity), [return_maps])
+      }
+   catch _:_ ->
+      {error, {badarg, payload}}
+   end.
 
 %%
-%%
--spec to_text(_) -> {_, _, _}.
+%% encode result as plain text
+-spec to_text(_) -> response().
 
 to_text(Text) ->
    to_text([], Text).
@@ -396,62 +379,11 @@ to_text(Code, Head, Text) ->
    }.
 
 %%
-%%
+%% decode request payload as plain text
 -spec as_text(_) -> _.
 
 as_text(#request{entity = Entity}) ->
    {ok, Entity}.
-
-
-%%
-%% compile routing table
--spec routes(atom(), [_]) -> {module, atom()}.
-
-routes(Id, Routes) ->
-   hornlog:c(Id, 
-      [route(X) || X <- Routes]).
-
-%% compile route to hornlog rule
-route({Path, Resource, Env}) ->
-   %%
-   %% the load of resource is required for any other deployment configuration
-   %% except OTP releases. Not Available error is returned if code is not loaded. 
-   %% The restd do the best effort to load the module but ignores any possible errors.
-   %% Purge is required if same module is bound to multiple end-points
-   %%
-   %% Note: purge impacts on code test coverage
-   %% 
-   %% code:purge(Resource),
-   %% code:load_file(Resource),
-   Pattern = uri:segments( uri:new(Path) ),
-   Export  = Resource:module_info(exports),
-   hornlog:rule(
-      hornlog:head(fun restd:return/5, [Pattern, Resource, Export, Env]), 
-      lists:map(fun pattern/1 , Pattern)
-   );
-route({Route, Resource}) ->
-   route({Route, Resource, []}).
-
-%% build uri pattern matcher
-pattern(<<$:, _/binary>>) ->
-   '_';
-pattern(<<$_>>) ->
-   '_';
-pattern(X) ->
-   X.
-
-%% return matched result
-return(Pattern, Resource, Export, Env, Uri) ->
-   Lenv = lists:map(
-      fun({<<$:, Key/binary>>, Val}) ->
-         {Key, Val}
-      end,
-      lists:filter(
-         fun({<<$:, _/binary>>, _}) -> true; (_) -> false end,
-         lists:zip(Pattern, uri:segments(Uri))
-      )
-   ),
-   #{resource => Resource, export => Export, env => Lenv ++ Env}.
 
    
 %%%----------------------------------------------------------------------------   

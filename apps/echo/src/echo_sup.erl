@@ -36,6 +36,7 @@ endpoints() ->
       echo_restapi:headers(),
       echo_restapi:get(),
       echo_restapi:post(),
+      echo_restapi:post_json(),
       echo_restapi:put(),
       echo_restapi:patch(),
       echo_restapi:delete(),
@@ -47,6 +48,7 @@ endpoints() ->
       echo_restapi:response_header(),
       echo_restapi:redirect_n(),
       echo_restapi:cookies(),
+      echo_restapi:stream(),
       restd_static:reader("/", echo),
       restd_static:reader("/_", echo)
    ].

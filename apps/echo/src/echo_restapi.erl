@@ -11,6 +11,7 @@
    headers/0,
    get/0,
    post/0,
+   post_json/0,
    put/0,
    patch/0,
    delete/0,
@@ -21,7 +22,8 @@
    status_code/0,
    response_header/0,
    redirect_n/0,
-   cookies/0
+   cookies/0,
+   stream/0
 ]).
 
 %%
@@ -93,6 +95,20 @@ post() ->
          _ /= restd:accepted_content({'*', '*'}),
       Data /= restd:as_text(),
       restd:to_json(#{headers => Head, peer => Peer, url => uri:s(Url), method => Mthd, data => Data})
+   ].
+
+%%
+%% Return POST JSON only
+%%
+post_json() ->
+   [pattern ||
+      Url  /= restd:url("/post/json"),
+      Mthd /= restd:method('POST'),
+      Head /= restd:headers(),
+      Peer /= restd:header(<<"X-Knet-Peer">>),
+         _ /= restd:accepted_content({application, json}),
+      Json /= restd:as_json(),
+      restd:to_json(#{headers => Head, peer => Peer, url => uri:s(Url), method => Mthd, data => Json})
    ].
 
 %%
@@ -218,7 +234,6 @@ response_header() ->
       _ /= restd:path("/response-headers"),
       _ /= restd:method('GET'),
       Query /= restd:q(),
-      fmap(io:format("==> ~p~n", [Query])),
       restd:to_json(Query, Query)
    ].
 
@@ -268,4 +283,22 @@ set_cookie(Key, Val) ->
 
 set_cookie(Key) ->
    {<<"Set-Cookie">>, <<(scalar:s(Key))/binary, $=, $;, "expires=Thu, 01-Jan-1970 00:00:00 GMT; Max-Age=0; Path=/">>}.
+
+%%
+%% Stream N chunks
+%%
+stream() ->
+   [pattern ||
+      Path /= restd:path("/stream/_"),
+         _ /= restd:method('GET'),
+         fmap({200, [], stream_data(Path)})
+   ].
+
+stream_data([_, N]) ->
+   stream:take(scalar:i(N),
+      stream:cycle([
+         <<"<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</p>\n">>
+      ])
+   ). 
+
 
