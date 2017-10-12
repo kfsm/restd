@@ -23,7 +23,8 @@
    response_header/0,
    redirect_n/0,
    cookies/0,
-   stream/0
+   stream/0,
+   websocket/0
 ]).
 
 %%
@@ -291,7 +292,7 @@ stream() ->
    [pattern ||
       Path /= restd:path("/stream/_"),
          _ /= restd:method('GET'),
-         fmap({200, [], stream_data(Path)})
+      fmap({200, [], stream_data(Path)})
    ].
 
 stream_data([_, N]) ->
@@ -301,4 +302,13 @@ stream_data([_, N]) ->
       ])
    ). 
 
+%%
+%% echo websocket
+%%
+websocket() ->
+   [pattern ||
+           _ /= restd:path("/ws"),
+      Packet /= restd:as_text(),
+      fmap([<<$+, $+, $+, $ , Packet/binary>>])
+   ].
 

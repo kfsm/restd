@@ -149,23 +149,26 @@ free(_Reason, _State) ->
 %%%
 %%%------------------------------------------------------------------   
 
-'WEBSOCK'(_, _, State) ->
-   {stop, not_implemented, State}.
+'WEBSOCK'({ws, _, eof}, _Pipe, State) ->
+   {stop, normal, State};
 
-% 'WEBSOCK'({ws, _, _} = Msg, Pipe, #http{} = State) ->
-%    case stream(State) of
-%       ?XOR_R(#rest{} = Rest) ->
-%          'WEBSOCK'(Msg, Pipe, Rest);
+'WEBSOCK'({ws, _, {error, Reason}}, _Pipe, State) ->
+   {stop, Reason, State};
 
-%       ?XOR_L(_Error) ->
-%          % web-socket is already established, 
-%          % we cannot use HTTP status code to indicate routing error
-%          % Routing is failed send only error and terminate connection
-%          {stop, normal, State} 
-%    end;
+'WEBSOCK'({ws, _, Packet}, Pipe, #state{} = State) ->
+   case execute_stream(State#state{entity = Packet}) of
+      ?EITHER_R({s, _, _} = Http) ->
+         stream:foreach(pipe:a(Pipe, _), Http),
+         {next_state, 'WEBSOCK', State};
 
-% 'WEBSOCK'({ws, _, {terminated, _}}, _Pipe, State) ->
-%    {stop, normal, State};
+      ?EITHER_R(Http) ->
+         lists:foreach(pipe:a(Pipe, _), Http),
+         {next_state, 'WEBSOCK', State};
+
+      ?EITHER_L(Reason) ->
+         {stop, Reason, State}
+   end.
+
 
 % 'WEBSOCK'({ws, _, Msg}, Pipe, #rest{mod = Mod, inhead = InHead, eghead = EgHead} = State) ->
 %    EgType = opts:val(<<"Content-Type">>, EgHead),
@@ -217,6 +220,22 @@ execute_rest(#state{endpoints = Endpoints, request = Request, entity = Entity}) 
 
 %%
 %%
+execute_stream(#state{endpoints = Endpoints, request = Request, entity = Entity}) ->
+   case 
+      endpoints(Endpoints, [], Request#request{entity = Entity})
+   of
+      ?EITHER_R(Http) ->
+         streaming(Http);
+      ?EITHER_L(Reasons) ->
+         % web-socket is already established, 
+         % we cannot use HTTP status code to indicate routing error
+         % Routing is failed send only error and terminate connection
+         Reason = fail_sort_by(Reasons),
+         {error, Reason}
+   end.
+
+%%
+%%
 endpoints([Head | Tail], Reasons, #request{} = Request) ->
    case Head(Request) of
       ?EITHER_R(_) = Result ->
@@ -232,14 +251,10 @@ endpoints([], Reasons, #request{}) ->
 %%
 %% https://tools.ietf.org/html/rfc7807
 fail(#request{uri = Uri}, Reasons) ->
-   [Error | _] = lists:sort(
-      fun(A, B) -> 
-         fail_priority(A) =< fail_priority(B)
-      end,
-      Reasons
-   ),
-   {Code, Json} = failwith(Error, Uri),
+   Reason = fail_sort_by(Reasons),
+   {Code, Json} = failwith(Reason, Uri),
    {Code, [{<<"Content-Type">>, <<"application/json">>}], jsx:encode(Json)}.
+
 
 failwith({Reason, Details}, Uri) ->
    {Code, Text} = status_code(Reason),
@@ -263,6 +278,14 @@ failwith(Reason, Uri) ->
       }
    }.
 
+fail_sort_by(Reasons) ->
+   hd(lists:sort(
+      fun(A, B) -> 
+         fail_priority(A) =< fail_priority(B)
+      end,
+      Reasons
+   )).
+
 fail_priority({not_available, _}) -> 1000;
 fail_priority({not_allowed, _}) -> 990;
 fail_priority({not_acceptable, _}) -> 820;
@@ -271,59 +294,6 @@ fail_priority({unauthorized, _}) -> 520;
 fail_priority({forbidden, _}) -> 500;
 fail_priority({badarg, _}) -> 10;
 fail_priority(_) -> 1.
-
-
-
-% %%
-% %% 
-% rest(#http{route = Endpoints} = Http, Entity) ->
-%    endpoints(Endpoints, Http, Entity).
-
-
-%    case rest(State#http{q = undefined}, deq:list(Q)) of
-%       % ?EITHER_R({s, _, _} = Http) ->
-%       %    streams:foreach(pipe:a(Pipe, _), Http);
-
-%       ?EITHER_R(Http) ->
-%          io:format("==> ~p~n", [Http]),
-%          lists:foreach(pipe:a(Pipe, _), Http);
-
-%       ?EITHER_L({_, _, _} = Error) ->
-%          pipe:a(Pipe, Error);
-
-%       ?EITHER_L({Code, _} = Error) ->
-%          {ok, Http} = packetize([{<<"Content-Type">>, <<"application/json">>}], {Code, jsx:encode([Error])}),
-%          lists:foreach(pipe:a(Pipe, _), Http)         
-%    end,
-%    {next_state, 'ACCEPT', #state{endpoints = Endpoints}};      
-
-%    case f(Rest, Mthd, {EgType, InType}, Entity) of
-%       ?XOR_R(Http) ->
-%          packetize(EgHead, Http);
-%       ?XOR_L(Reason) ->
-%          {error, fail(Rest, Reason)};
-%       Http -> 
-%          packetize(EgHead, Http)
-%    end.
-
-
-% %%
-% %%
-% endpoints(Endpoints, #http{mthd = Mthd, head = Head, uri = Uri}, Entity) ->
-%    endpoints(Endpoints, #request{mthd = Mthd, head = Head, uri = Uri, entity = Entity}).
-
-% endpoints([Head | Tail], Request) ->
-%    case Head(Request) of
-%       ?EITHER_R(Http) ->
-%          packetize(Http);
-%       ?EITHER_L(Reason) ->
-%          io:format("==> ~p~n", [Reason]),
-%          endpoints(Tail, Request)
-%    end;
-
-% endpoints([], #request{uri = Uri}) ->
-%    {error, {not_available, uri:s(Uri)}}.
-
 
 
 %%
@@ -362,6 +332,16 @@ encode(Head, Entity) ->
       _ ->
          lists:flatten([Entity])
    end.
+
+%%
+%%
+streaming({s, _, _} = Stream) ->
+   {ok, stream:map(fun(X) -> {packet, X} end, Stream)};
+
+streaming(Entity) ->
+   {ok,
+      [{packet, X} || X <- lists:flatten([Entity])]
+   }.
 
 
 %% encode rest api status code response
@@ -448,56 +428,3 @@ status_code(not_available) -> status_code(503);
 %status(504) -> <<"504 Gateway Timeout">>;
 %status(505) -> <<"505 HTTP Version Not Supported">>.
 status_code(_) -> status_code(500).
-
-
-
-
-
-
-% packetize(EgHead, {Code, Head0, Entity}) 
-%  when is_binary(Entity) ->
-%    Head1 = orddict:merge(
-%       fun(_, _, X) -> X end,
-%       orddict:store(<<"Content-Length">>, size(Entity), EgHead),
-%       orddict:from_list(Head0)
-%    ),
-%    {ok, [{Code, Head1, Entity}]};
-
-% packetize(EgHead, {Code, Head0, Entity})
-%  when is_list(Entity) ->
-%    case lists:keyfind(<<"Content-Length">>, 1, Head0) of
-%       false ->
-%          Head1 = orddict:merge(
-%             fun(_, _, X) -> X end,
-%             orddict:store(<<"Content-Length">>, iolist_size(Entity), EgHead),
-%             orddict:from_list(Head0)
-%          ),
-%          Head2 = orddict:store(<<"Transfer-Encoding">>, <<"chunked">>, Head1),
-%          {ok, [{Code, Head2}|Entity] ++ [<<>>]};
-%       _ ->
-%          Head1 = orddict:merge(
-%             fun(_, _, X) -> X end,
-%             EgHead,
-%             orddict:from_list(Head0)
-%          ),
-%          {ok, [{Code, Head1, Entity}]}
-%    end;
-
-% packetize(EgHead, {Code, Head0, {s, _, _} = Entity}) ->
-%    Head1 = orddict:merge(
-%       fun(_, _, X) -> X end,
-%       orddict:store(<<"Transfer-Encoding">>,  <<"chunked">>, EgHead),
-%       orddict:from_list(Head0)
-%    ),
-%    {ok, stream:'++'(stream:new({Code, Head1}), Entity)};
-
-% packetize(EgHead, {Code, Entity}) ->
-%    packetize(EgHead, {Code, [], Entity});
-
-% packetize(EgHead, Code)
-%  when is_atom(Code) orelse is_integer(Code) ->
-%    packetize(EgHead, {Code, [], <<>>});
-
-% packetize(EgHead, Entity) ->
-%    packetize(EgHead, {ok, [], Entity}).
-
