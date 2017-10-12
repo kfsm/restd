@@ -242,20 +242,24 @@ fail(#request{uri = Uri}, Reasons) ->
    {Code, [{<<"Content-Type">>, <<"application/json">>}], jsx:encode(Json)}.
 
 failwith({Reason, Details}, Uri) ->
-   {500, 
+   {Code, Text} = status_code(Reason),
+   {Code, 
       #{
-         type    => <<"http://example.org">>,
-         title   => scalar:s(Reason),
-         details => Details
+         type     => uri:s(uri:segments([Code], uri:new(<<"https://httpstatuses.com">>))),
+         instance => uri:s(Uri),
+         title    => Text,
+         details  => scalar:s([scalar:s(Reason), $:, $ , scalar:s(Details)])
       }
    };
 
 failwith(Reason, Uri) ->
-   {500, 
+   {Code, Text} = status_code(Reason),
+   {Code, 
       #{
-         type    => <<"http://example.org">>,
-         title   => scalar:s(Reason),
-         details => uri:s(Uri)
+         type     => uri:s(uri:segments([Code], uri:new(<<"https://httpstatuses.com">>))),
+         instance => uri:s(Uri),         
+         title    => Text,
+         details  => scalar:s(Reason)
       }
    }.
 
