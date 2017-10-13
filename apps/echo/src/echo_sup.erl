@@ -23,7 +23,7 @@ init([]) ->
       {
          {one_for_one, 4, 1800},
          [
-            restd:spec(endpoints(), [{port, "http://*:8888"}])
+            restd:spec(endpoints(), [{port, "http://*:8888"}, {backlog, 1024}])
          ]
       }
    }.

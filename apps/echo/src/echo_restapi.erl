@@ -42,9 +42,8 @@ ipaddr_json() ->
 
 ipaddr_text() ->
    [pattern ||
-      _ /= restd:path("/ip"),
+      _ /= restd:path("/ip/text"),
       _ /= restd:method('GET'),
-      _ /= restd:provided_content({text, plain}),
       Peer /= restd:header(<<"X-Knet-Peer">>),
       restd:to_text(Peer)
    ].

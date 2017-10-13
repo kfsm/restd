@@ -114,13 +114,25 @@ free(_Reason, _State) ->
    };
 
 'ACCEPT'({sidedown, _, _}, _Pipe, State) ->
-   {stop, normal, State}.
+   {stop, normal, State};
+
+'ACCEPT'({_, _, passive}, Pipe, State) ->
+   pipe:a(Pipe, {active, 1024}),
+   {next_state, 'ACCEPT', State}.
+
+% 'ACCEPT'(_, _Pipe, State) ->
+%    % io:format("=> ~p~n", [X]),
+%    {next_state, 'ACCEPT', State}.
 
 %%%------------------------------------------------------------------
 %%%
 %%% HTTP
 %%%
 %%%------------------------------------------------------------------   
+
+'HTTP'({_, _, passive}, Pipe, State) ->
+   pipe:a(Pipe, {active, 1024}),
+   {next_state, 'HTTP', State};
 
 'HTTP'({http, _Uri, eof}, Pipe, #state{endpoints = Endpoints} = State) ->
    case execute_rest(State) of
