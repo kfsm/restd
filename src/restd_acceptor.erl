@@ -100,7 +100,7 @@ free(_Reason, _State) ->
 'ACCEPT'({http, _, {Mthd, Uri, Head}}, _Pipe, #state{} = State) ->
    {next_state, 'HTTP', 
       State#state{
-         request = #request{mthd = Mthd, uri = Uri, head = Head},
+         request = #request{t = os:timestamp(), mthd = Mthd, uri = Uri, head = Head},
          entity  = deq:new()
       }
    };
@@ -108,7 +108,7 @@ free(_Reason, _State) ->
 'ACCEPT'({ws, _, {Mthd, Uri, Head}}, _Pipe, #state{} = State) ->
    {next_state, 'WEBSOCK', 
       State#state{
-         request = #request{mthd = Mthd, uri = Uri, head = Head},
+         request = #request{t = os:timestamp(), mthd = Mthd, uri = Uri, head = Head},
          entity  = deq:new()
       }
    };
@@ -119,10 +119,6 @@ free(_Reason, _State) ->
 'ACCEPT'({_, _, passive}, Pipe, State) ->
    pipe:a(Pipe, {active, 1024}),
    {next_state, 'ACCEPT', State}.
-
-% 'ACCEPT'(_, _Pipe, State) ->
-%    % io:format("=> ~p~n", [X]),
-%    {next_state, 'ACCEPT', State}.
 
 %%%------------------------------------------------------------------
 %%%

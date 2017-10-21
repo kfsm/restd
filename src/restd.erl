@@ -45,6 +45,7 @@
    cors/1, 
    cors/2,
    cors/3,
+   accesslog/2,
    to_json/1,
    to_json/2,
    to_json/3,
@@ -321,6 +322,36 @@ default_cors() ->
      ,{<<"Access-Control-Allow-Headers">>, <<"Content-Type">>}
      ,{<<"Access-Control-Max-Age">>,       600}
    ].
+
+%%
+%%
+%% output access evidence using common access log format:
+%%
+%%  peer user "request addr" response "user-agent" byte pack time
+%%
+%%   * peer - ip address of peer making request
+%%   * user - identifier of user
+%%   * request - protocol specific request string
+%%   * addr - local address
+%%   * response - protocol specific request code
+%%   * user-agent - user agent string if applicable
+%%   * byte - number of transmitted bytes
+%%   * time - protocol latency is micro seconds 
+%%
+%% @example
+%%   127.0.0.1  -  "GET http://127.0.0.1:8888/" 200 "curl/7.37.1" 252 4 37123209
+-spec accesslog(response(), request()) -> datum:either(response()).
+
+accesslog({Code, _, Payload} = Response, #request{t = T, mthd = Mthd, uri = Uri, head = Head}) ->
+   Peer = lens:get(lens:pair(<<"X-Knet-Peer">>, $-), Head),
+   UA   = lens:get(lens:pair(<<"User-Agent">>, $-), Head),
+   Log  = erlang:iolist_to_binary([Peer, $ , $-, $ , $", scalar:s(Mthd), $ , uri:s(Uri), $", $ , scalar:s(Code), $ , $", UA, $", $ , scalar:s(iolist_size(Payload)), $ , scalar:s(tempus:u(tempus:diff(T)))]),
+   lager:notice(Log),
+   {ok, Response};
+
+accesslog({ok, Response}, Request) ->
+   accesslog(Response, Request).
+
 
 %%
 %%

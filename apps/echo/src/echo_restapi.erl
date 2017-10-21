@@ -23,6 +23,7 @@
    response_header/0,
    redirect_n/0,
    cookies/0,
+   accesslog/0,
    stream/0,
    websocket/0
 ]).
@@ -283,6 +284,17 @@ set_cookie(Key, Val) ->
 
 set_cookie(Key) ->
    {<<"Set-Cookie">>, <<(scalar:s(Key))/binary, $=, $;, "expires=Thu, 01-Jan-1970 00:00:00 GMT; Max-Age=0; Path=/">>}.
+
+%%
+%% trace access log
+accesslog() ->
+   [pattern ||
+      _ /= restd:path("/accesslog"),
+      _ /= restd:method('GET'),
+      Peer /= restd:header(<<"X-Knet-Peer">>),
+      _ /= restd:accesslog(restd:to_text(Peer))
+   ].   
+
 
 %%
 %% Stream N chunks

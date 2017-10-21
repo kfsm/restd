@@ -48,6 +48,7 @@ endpoints() ->
       echo_restapi:response_header(),
       echo_restapi:redirect_n(),
       echo_restapi:cookies(),
+      echo_restapi:accesslog(),
       echo_restapi:stream(),
       echo_restapi:websocket(),
 
