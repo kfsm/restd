@@ -140,7 +140,7 @@ path(_, _, Uri) ->
 url(Path, #request{uri = Uri} = Request) ->
    [either ||
       path(Path, Request),
-      fmap(Uri)
+      cats:unit(Uri)
    ].
 
 %%
@@ -159,7 +159,7 @@ q(#request{uri = Uri}) ->
 q(Key, #request{} = Request) ->
    [either ||
       q(Request),
-      fmap(
+      cats:unit(
          case lens:get(lens:pair(Key, undefined), _) of 
             undefined ->
                {error, {badarg, Key}};
@@ -207,8 +207,8 @@ header(Head, #request{head = Headers}) ->
 provided_content({_, _} = Provide, #request{} = Request) ->
    [either ||
       Head <- header(<<"Accept">>, Request),
-      fmap(parse_content_type(Head)),
-      fmap(negotiate(Provide, _)),
+      cats:unit(parse_content_type(Head)),
+      cats:unit(negotiate(Provide, _)),
       return_provided_content(_, Head)
    ].
 
@@ -225,15 +225,15 @@ return_provided_content(_, Accept) ->
 provided_encoding(#request{} = Request) ->
    [either ||
       Head <- header(<<"Accept-Encoding">>, Request),
-      fmap(parse_encoding(Head)),
+      cats:unit(parse_encoding(Head)),
       return_provided_encoding(_, Head)
    ].
 
 provided_encoding(Encoding, #request{} = Request) ->
    [either ||
       Head <- header(<<"Accept-Encoding">>, Request),
-      fmap(parse_encoding(Head)),
-      fmap(lists:filter(fun(X) -> X =:= scalar:s(Encoding) end, _)),
+      cats:unit(parse_encoding(Head)),
+      cats:unit(lists:filter(fun(X) -> X =:= scalar:s(Encoding) end, _)),
       return_provided_encoding(_, Head)
    ].
 
@@ -249,8 +249,8 @@ return_provided_encoding(_, Encoding) ->
 accepted_content({_, _} = Accept, #request{} = Request) ->
    [either ||
       Head <- header(<<"Content-Type">>, Request),
-      fmap(parse_content_type(Head)),
-      fmap(negotiate(Accept, _)),
+      cats:unit(parse_content_type(Head)),
+      cats:unit(negotiate(Accept, _)),
       return_accepted_content(_, Head)
    ].
 

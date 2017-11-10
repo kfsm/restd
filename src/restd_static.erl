@@ -29,7 +29,7 @@
 %% returns static file
 %%
 reader(Pattern, Root) ->
-   [pattern ||
+   [reader ||
       Path /= restd:path(Pattern),
          _ /= restd:method('GET'),
       File <- filename(Root, Path),

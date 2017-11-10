@@ -32,7 +32,7 @@
 %% Returns Origin IP.
 %%
 ipaddr_json() ->
-   [pattern ||
+   [reader ||
       _ /= restd:path("/ip"),
       _ /= restd:method('GET'),
       _ /= restd:provided_content({application, json}),
@@ -42,7 +42,7 @@ ipaddr_json() ->
 
 
 ipaddr_text() ->
-   [pattern ||
+   [reader ||
       _ /= restd:path("/ip/text"),
       _ /= restd:method('GET'),
       Peer /= restd:header(<<"X-Knet-Peer">>),
@@ -54,7 +54,7 @@ ipaddr_text() ->
 %% Returns user-agent.
 %%
 user_agent() ->
-   [pattern ||
+   [reader ||
       _ /= restd:path("/user-agent"),
       UA /= restd:header(<<"User-Agent">>),
       restd:to_json(#{'user-agent' => UA})
@@ -64,7 +64,7 @@ user_agent() ->
 %% Returns header dict.
 %%
 headers() ->
-   [pattern ||
+   [reader ||
       _ /= restd:path("/headers"),
       _ /= restd:method('GET'),
       _ /= restd:provided_content({application, json}),
@@ -76,7 +76,7 @@ headers() ->
 %% Returns GET data.
 %%
 get() ->
-   [pattern ||
+   [reader ||
       Url  /= restd:url("/get"),
       Mthd /= restd:method('GET'),
       Head /= restd:headers(),
@@ -88,7 +88,7 @@ get() ->
 %% Returns POST data.
 %% 
 post() ->
-   [pattern ||
+   [reader ||
       Url  /= restd:url("/post"),
       Mthd /= restd:method('POST'),
       Head /= restd:headers(),
@@ -102,7 +102,7 @@ post() ->
 %% Return POST JSON only
 %%
 post_json() ->
-   [pattern ||
+   [reader ||
       Url  /= restd:url("/post/json"),
       Mthd /= restd:method('POST'),
       Head /= restd:headers(),
@@ -116,7 +116,7 @@ post_json() ->
 %% Returns PUT data.
 %% 
 put() ->
-   [pattern ||
+   [reader ||
       Url  /= restd:url("/put"),
       Mthd /= restd:method('PUT'),
       Head /= restd:headers(),
@@ -130,7 +130,7 @@ put() ->
 %% Returns PATCH data.
 %% 
 patch() ->
-   [pattern ||
+   [reader ||
       Url  /= restd:url("/patch"),
       Mthd /= restd:method('PATCH'),
       Head /= restd:headers(),
@@ -145,7 +145,7 @@ patch() ->
 %% Returns DELETE data.
 %% 
 delete() ->
-   [pattern ||
+   [reader ||
       Url  /= restd:url("/delete"),
       Mthd /= restd:method('DELETE'),
       Head /= restd:headers(),
@@ -159,9 +159,9 @@ delete() ->
 %% Returns page containing UTF-8 data.
 %%
 utf8() ->
-   [pattern ||
+   [reader ||
       _ /= restd:path("/encoding/utf8"),
-      fmap({
+      cats:unit({
          200, 
          [{<<"Content-Type">>, <<"text/html; charset=utf-8">>}],
          [
@@ -176,7 +176,7 @@ utf8() ->
 %% Return deflate-encoded data.
 %%
 deflate() ->
-   [pattern ||
+   [reader ||
       Url  /= restd:url("/encoding/deflate"),
       Mthd /= restd:method('GET'),
       Head /= restd:headers(),
@@ -190,7 +190,7 @@ deflate() ->
 %% Return gzip-encoded data.
 %%
 gzip() ->
-   [pattern ||
+   [reader ||
       Url  /= restd:url("/encoding/gzip"),
       Mthd /= restd:method('GET'),
       Head /= restd:headers(),
@@ -204,7 +204,7 @@ gzip() ->
 %% Negotiate compression protocol and return encoded data
 %%
 compress() ->
-   [pattern ||
+   [reader ||
       Url  /= restd:url("/encoding/compress"),
       Mthd /= restd:method('GET'),
       Head /= restd:headers(),
@@ -218,7 +218,7 @@ compress() ->
 %% Returns given HTTP Status code.
 %%
 status_code() ->
-   [pattern ||
+   [reader ||
       Path /= restd:path("/status/_"),
          _ /= restd:method('GET'),
       do_status_code(Path)
@@ -231,7 +231,7 @@ do_status_code([_, Code]) ->
 %% Return given response headers
 %%
 response_header() ->
-   [pattern ||
+   [reader ||
       _ /= restd:path("/response-headers"),
       _ /= restd:method('GET'),
       Query /= restd:q(),
@@ -242,7 +242,7 @@ response_header() ->
 %% 302 Redirects n times.
 %%
 redirect_n() ->
-   [pattern ||
+   [reader ||
       Path /= restd:path("/redirect/_"),
          _ /= restd:method('GET'),
       redirect(Path)
@@ -260,7 +260,7 @@ redirect([_, N]) ->
 %% Deletes one or more simple cookies.
 %%
 cookies() ->
-   [pattern ||
+   [reader ||
       Path /= restd:path("/cookies/*"),
          _ /= restd:method('GET'),
       Cookie /= restd:header(<<"Cookie">>),
@@ -288,7 +288,7 @@ set_cookie(Key) ->
 %%
 %% trace access log
 accesslog() ->
-   [pattern ||
+   [reader ||
       _ /= restd:path("/accesslog"),
       _ /= restd:method('GET'),
       Peer /= restd:header(<<"X-Knet-Peer">>),
@@ -300,10 +300,10 @@ accesslog() ->
 %% Stream N chunks
 %%
 stream() ->
-   [pattern ||
+   [reader ||
       Path /= restd:path("/stream/_"),
          _ /= restd:method('GET'),
-      fmap({200, [], stream_data(Path)})
+      cats:unit({200, [], stream_data(Path)})
    ].
 
 stream_data([_, N]) ->
@@ -317,9 +317,9 @@ stream_data([_, N]) ->
 %% echo websocket
 %%
 websocket() ->
-   [pattern ||
+   [reader ||
            _ /= restd:path("/ws"),
       Packet /= restd:as_text(),
-      fmap([<<$+, $+, $+, $ , Packet/binary>>])
+      cats:unit([<<$+, $+, $+, $ , Packet/binary>>])
    ].
 
