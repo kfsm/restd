@@ -31,14 +31,14 @@
 
 %%
 %%
-start_link(Service, Opts) ->
+start_link(Routes, Opts) ->
    Port  = opts:val(port, Opts),
-   Route = opts:val(route, Opts),
-   {module, _} = restd:routes(Service, Route),
-   supervisor:start_link(?MODULE, [Port, Service, Opts]).
+   % Route = opts:val(route, Opts),
+   % {module, _} = restd:routes(Service, Route),
+   supervisor:start_link(?MODULE, [Port, Routes, Opts]).
    
-init([Port, Service, Opts]) -> 
-   listen(Port, Service, Opts),
+init([Port, Routes, Opts]) -> 
+   listen(Port, Routes, Opts),
    {ok,
       {
          {one_for_one, 4, 1800},
@@ -48,11 +48,11 @@ init([Port, Service, Opts]) ->
 
 %%
 %%
-listen(Uri, Service, Opts) ->
+listen(Uri, Routes, Opts) ->
    Sock = opts:val(sock, [], Opts),
    % @todo knet listen do not obey nopipe option  
    knet:listen(Uri, [
-      {acceptor, {restd_acceptor, [Service]}}
+      {acceptor, {restd_acceptor, [Routes]}}
      ,opts:get(pool,    10, Opts)
      ,opts:get(backlog, 25, Opts)
      ,nopipe

@@ -22,6 +22,7 @@
 
 -compile({parse_transform, category}).
 -compile({parse_transform, partial}).
+-include("restd.hrl").
 -include_lib("datum/include/datum.hrl").
 
 -export([
@@ -36,30 +37,32 @@
 ]).
  
 %% resource idle 
--record(idle, {
-   route   = undefined :: atom()         %% routing table
+-record(state, {
+   endpoints = undefined :: atom()         %% routing table
+  ,request   = undefined :: #request{}     %%
+  ,entity    = undefined :: datum:q()      %% incoming entitity queue
 }).
 
 %% http connection is established
--record(http, {
-   route  = undefined :: atom()          %% routing table
-  ,mthd   = undefined :: _
-  ,uri    = undefined :: uri:uri()
-  ,head   = undefined :: _
-  ,env    = undefined :: _
-  ,q      = undefined :: datum:q()       %% current queue
-}).
+% -record(http, {
+%    route  = undefined :: atom()          %% routing table
+%   ,mthd   = undefined :: _
+%   ,uri    = undefined :: uri:uri()
+%   ,head   = undefined :: _
+%   ,env    = undefined :: _
+%   ,q      = undefined :: datum:q()       %% current queue
+% }).
 
 %% http request is mapped to resource 
--record(rest, {
-   mod    = undefined :: atom()          %% resource implementation
-  ,export = undefined :: _               %% resource exports
-  ,mthd   = undefined :: _
-  ,uri    = undefined :: uri:uri()
-  ,inhead = undefined :: _               %% ingress http headers
-  ,eghead = undefined :: _               %% egress http headers
-  ,env    = undefined :: _
-}).
+% -record(rest, {
+%    mod    = undefined :: atom()          %% resource implementation
+%   ,export = undefined :: _               %% resource exports
+%   ,mthd   = undefined :: _
+%   ,uri    = undefined :: uri:uri()
+%   ,inhead = undefined :: _               %% ingress http headers
+%   ,eghead = undefined :: _               %% egress http headers
+%   ,env    = undefined :: _
+% }).
 
 %%%------------------------------------------------------------------
 %%%
@@ -67,12 +70,12 @@
 %%%
 %%%------------------------------------------------------------------   
 
-start_link(Route, Uri, Opts) ->
-   pipe:start_link(?MODULE, [Route, Uri, Opts], []).
+start_link(Endpoints, Uri, Opts) ->
+   pipe:start_link(?MODULE, [Endpoints, Uri, Opts], []).
 
-init([Route, Uri, Opts]) ->
+init([Endpoints, Uri, Opts]) ->
    knet:bind(Uri, Opts),
-   {ok, 'ACCEPT', #idle{route = Route}}.
+   {ok, 'ACCEPT', #state{endpoints = Endpoints}}.
 
 free(_Reason, _State) ->
    ok.
@@ -94,32 +97,28 @@ free(_Reason, _State) ->
 
 %%
 %%
-'ACCEPT'({http, _, {Mthd, Uri, Head, Env}}, _Pipe, #idle{route = Route}) ->
+'ACCEPT'({http, _, {Mthd, Uri, Head}}, _Pipe, #state{} = State) ->
    {next_state, 'HTTP', 
-      #http{
-         route = Route,
-         mthd  = Mthd,
-         uri   = Uri,
-         head  = Head,
-         env   = Env,
-         q     = deq:new()
+      State#state{
+         request = #request{t = os:timestamp(), mthd = Mthd, uri = Uri, head = Head},
+         entity  = deq:new()
       }
    };
 
-'ACCEPT'({ws, _, {Mthd, Uri, Head, Env}}, _Pipe, #idle{route = Route}) ->
+'ACCEPT'({ws, _, {Mthd, Uri, Head}}, _Pipe, #state{} = State) ->
    {next_state, 'WEBSOCK', 
-      #http{
-         route = Route,
-         mthd  = Mthd,
-         uri   = Uri,
-         head  = Head,
-         env   = Env,
-         q     = deq:new()
+      State#state{
+         request = #request{t = os:timestamp(), mthd = Mthd, uri = Uri, head = Head},
+         entity  = deq:new()
       }
    };
 
 'ACCEPT'({sidedown, _, _}, _Pipe, State) ->
-   {stop, normal, State}.
+   {stop, normal, State};
+
+'ACCEPT'({_, _, passive}, Pipe, State) ->
+   pipe:a(Pipe, {active, 1024}),
+   {next_state, 'ACCEPT', State}.
 
 %%%------------------------------------------------------------------
 %%%
@@ -127,29 +126,29 @@ free(_Reason, _State) ->
 %%%
 %%%------------------------------------------------------------------   
 
-'HTTP'({http, _Uri, eof}, Pipe, #http{route = Route, q = Q} = State) ->
-   case rest(State#http{q = undefined}, deq:list(Q)) of
-      ?XOR_R({s, _, _} = Http) ->
-         streams:foreach(pipe:a(Pipe, _), Http);
+'HTTP'({_, _, passive}, Pipe, State) ->
+   pipe:a(Pipe, {active, 1024}),
+   {next_state, 'HTTP', State};
 
-      ?XOR_R(Http) ->
-         lists:foreach(pipe:a(Pipe, _), Http);
+'HTTP'({http, _Uri, eof}, Pipe, #state{endpoints = Endpoints} = State) ->
+   case execute_rest(State) of
+      ?EITHER_R({s, _, _} = Http) ->
+         stream:foreach(pipe:a(Pipe, _), Http),
+         {next_state, 'ACCEPT', #state{endpoints = Endpoints}};
 
-      ?XOR_L({_, _, _} = Error) ->
-         pipe:a(Pipe, Error);
+      ?EITHER_R(Http) ->
+         lists:foreach(pipe:a(Pipe, _), Http),
+         {next_state, 'ACCEPT', #state{endpoints = Endpoints}};
 
-      ?XOR_L({Code, _} = Error) ->
-         {ok, Http} = packetize([{'Content-Type', {application, json}}], {Code, jsx:encode([Error])}),
-         lists:foreach(pipe:a(Pipe, _), Http)         
-   end,
-   {next_state, 'ACCEPT', #idle{route = Route}};      
+      ?EITHER_L(Reason) ->
+         {stop, Reason, State}
+   end;
 
-
-'HTTP'({http, _Uri, Pckt}, _Pipe, #http{q = Q} = State)
+'HTTP'({http, _Uri, Pckt}, _Pipe, #state{entity = Entity} = State)
  when is_binary(Pckt) ->
    %% @todo: limit on entity, return 413
    {next_state, 'HTTP', 
-      State#http{q = deq:enq(Pckt, Q)}
+      State#state{entity = deq:enq(Pckt, Entity)}
    }.
 
 %%%------------------------------------------------------------------
@@ -158,50 +157,56 @@ free(_Reason, _State) ->
 %%%
 %%%------------------------------------------------------------------   
 
-'WEBSOCK'({ws, _, _} = Msg, Pipe, #http{} = State) ->
-   case stream(State) of
-      ?XOR_R(#rest{} = Rest) ->
-         'WEBSOCK'(Msg, Pipe, Rest);
-
-      ?XOR_L(_Error) ->
-         % web-socket is already established, 
-         % we cannot use HTTP status code to indicate routing error
-         % Routing is failed send only error and terminate connection
-         {stop, normal, State} 
-   end;
-
-'WEBSOCK'({ws, _, {terminated, _}}, _Pipe, State) ->
+'WEBSOCK'({ws, _, eof}, _Pipe, State) ->
    {stop, normal, State};
 
-'WEBSOCK'({ws, _, Msg}, Pipe, #rest{mod = Mod, inhead = InHead, eghead = EgHead} = State) ->
-   EgType = opts:val('Content-Type', EgHead),
-   InType = opts:val('Content-Type', undefined, InHead),
-   case Mod:recv({EgType, InType}, Msg, req(State)) of
-      ok ->
-         {next_state, 'WEBSOCK', State};
-      {ok, Pckt} ->
-         _ = pipe:a(Pipe, Pckt),
-         {next_state, 'WEBSOCK', State}
-   end;
+'WEBSOCK'({ws, _, {error, Reason}}, _Pipe, State) ->
+   {stop, Reason, State};
 
-'WEBSOCK'(Msg, Pipe, #rest{mod = Mod, inhead = InHead, eghead = EgHead} = State) ->
-   EgType = opts:val('Content-Type', EgHead),
-   InType = opts:val('Content-Type', undefined, InHead),
-   case Mod:send({EgType, InType}, Msg, req(State)) of
-      ok ->
+'WEBSOCK'({ws, _, Packet}, Pipe, #state{} = State) ->
+   case execute_stream(State#state{entity = Packet}) of
+      ?EITHER_R({s, _, _} = Http) ->
+         stream:foreach(pipe:a(Pipe, _), Http),
          {next_state, 'WEBSOCK', State};
-      {ok, Pckt} ->
-         pipe:send(pipe_sink(Pipe), Pckt),
+
+      ?EITHER_R(Http) ->
+         lists:foreach(pipe:a(Pipe, _), Http),
          {next_state, 'WEBSOCK', State};
-      eof  -> 
-         {stop, normal,  State}
+
+      ?EITHER_L(Reason) ->
+         {stop, Reason, State}
    end.
 
-pipe_sink(Pipe) ->
-   case pipe:b(Pipe) of
-      undefined -> pipe:a(Pipe);
-      Pid       -> Pid
-   end.
+
+% 'WEBSOCK'({ws, _, Msg}, Pipe, #rest{mod = Mod, inhead = InHead, eghead = EgHead} = State) ->
+%    EgType = opts:val(<<"Content-Type">>, EgHead),
+%    InType = opts:val(<<"Content-Type">>, undefined, InHead),
+%    case Mod:recv({EgType, InType}, Msg, req(State)) of
+%       ok ->
+%          {next_state, 'WEBSOCK', State};
+%       {ok, Pckt} ->
+%          _ = pipe:a(Pipe, Pckt),
+%          {next_state, 'WEBSOCK', State}
+%    end;
+
+% 'WEBSOCK'(Msg, Pipe, #rest{mod = Mod, inhead = InHead, eghead = EgHead} = State) ->
+%    EgType = opts:val(<<"Content-Type">>, EgHead),
+%    InType = opts:val(<<"Content-Type">>, undefined, InHead),
+%    case Mod:send({EgType, InType}, Msg, req(State)) of
+%       ok ->
+%          {next_state, 'WEBSOCK', State};
+%       {ok, Pckt} ->
+%          pipe:send(pipe_sink(Pipe), Pckt),
+%          {next_state, 'WEBSOCK', State};
+%       eof  -> 
+%          {stop, normal,  State}
+%    end.
+
+% pipe_sink(Pipe) ->
+%    case pipe:b(Pipe) of
+%       undefined -> pipe:a(Pipe);
+%       Pid       -> Pid
+%    end.
 
 %%%------------------------------------------------------------------
 %%%
@@ -211,394 +216,223 @@ pipe_sink(Pipe) ->
 
 %%
 %%
-rest(#http{} = Http, Entity) ->
-   [$^||
-      %%
-      %% request routing
-      resource(Http),
-      resource(_, Http),
-      is_method_implemented(_),
-      is_method_allowed(_),
-      is_access_authorized(_),
-      is_content_supported(_),
-      is_cors_allowed(_),
-      %% @todo: terminate OPTION request here with 200
-      %%
-      %% content negotiation
-      is_content_acceptable(_),
-      is_language_acceptable(_),
-      is_charset_acceptable(_),
-      is_encoding_acceptable(_),
-      %%
-      %% resource negotiation
-      is_resource_exists(_),
-      is_etags_matched(_),
-      is_modified(_),
-      %%
-      %% execute REST call
-      execute(_, Entity)
-   ].
-
-%%
-%%
-stream(#http{} = Http) ->
-   [$^||
-      %%
-      %% request routing
-      resource(Http),
-      resource(_, Http),
-      is_method_allowed(_),
-      is_access_authorized(_),
-      is_content_supported(_),
-      %%
-      %% content negotiation
-      is_content_acceptable(_),
-      is_language_acceptable(_),
-      is_charset_acceptable(_),
-      is_encoding_acceptable(_),
-      %%
-      %% resource negotiation
-      is_resource_exists(_),
-      is_etags_matched(_),
-      is_modified(_)
-   ].
-
-%%
-%%
--spec resource(#http{}) -> {ok, #rest{}} | {error, {not_available, _}}.
-
-resource(#http{route = Route, uri = Uri, env = LEnv}) ->
-   try
-      #{
-         resource := Mod, 
-         export   := Export, 
-         env      := GEnv
-      } = hornlog:q(Route, uri:segments(Uri), Uri),
-      {ok, #rest{mod = Mod, export = Export, env = LEnv ++ GEnv}}
-   catch _:_ ->
-      {error, {not_available, uri:s(Uri)}}
-   end.
-
-resource(#rest{} = Rest, #http{mthd = Mthd, uri = Uri, head = Head}) ->
-   {ok, Rest#rest{mthd = Mthd, uri = Uri, inhead = orddict:from_list(Head), eghead = []}}.
-
-
-%%
-%%
--spec is_method_implemented(#rest{}) -> {ok, #rest{}} | {error, {not_implemented, _}}.
-
-is_method_implemented(#rest{export = Export, mthd = Mthd} = Rest) ->
-   case lists:keyfind(Mthd, 1, Export) of
-      false ->
-         {error, {not_implemented, scalar:s(Mthd)}};
-      _ ->
-         {ok, Rest}
-   end.
-
-
-%%
-%% 
--spec is_method_allowed(#rest{}) -> {ok, #rest{}} | {error, {not_allowed, _}}.
-
-is_method_allowed(#rest{mthd = Mthd} = Rest) ->
-   List = f(Rest, allowed_methods),
-   case lists:member(Mthd, List) of
-      false -> 
-         {error, {not_allowed, scalar:s(Mthd)}};
-      true  -> 
-         {ok, Rest}
-   end.
-
-%%
-%%
--spec is_access_authorized(#rest{}) -> {ok, #rest{}} | {error, {unauthorized, _}}.
- 
-is_access_authorized(#rest{mthd = Mthd, uri = Uri} = Rest) ->
-   case f(Rest, authorize, Mthd) of
-      ok ->
-         {ok, Rest};
-      {ok, _} ->
-         {ok, Rest};
-      {error, forbidden} ->
-         {error, {forbidden, uri:s(Uri)}};
-      {error, _}  ->
-         {error, {unauthorized, uri:s(Uri)}}
-   end.
-
-%%
-%%
--spec is_cors_allowed(#rest{}) -> {ok, #rest{}} | {error, {unsupported, _}}.
-
-is_cors_allowed(#rest{inhead = InHead, eghead = EgHead} = Rest) ->
-   case orddict:find(<<"Origin">>, InHead) of
-      %% this is not a CORS request 
-      error ->
-         {ok, Rest};
-
-      {_, Origin} ->
-         Head = lists:foldl(
-            fun({Key, Val}, Acc) -> orddict:store(Key, Val, Acc) end,
-            orddict:store('Access-Control-Allow-Origin', Origin, EgHead),
-            f(Rest, cors)
-         ),
-         {ok, Rest#rest{eghead = Head}}
-   end.
-
-%%
-%%
--spec is_content_supported(#rest{}) -> {ok, #rest{}} | {error, {unsupported, _}}.
-
-is_content_supported(#rest{inhead = InHead} = Rest) ->
-   case opts:val('Content-Type', undefined, InHead) of
-      undefined -> 
-         {ok, Rest};
-
-      Type ->
-         Accept = f(Rest, content_accepted),
-         case restd:negotiate(Type, Accept) of
-            [{_, _} = NType | _] ->
-               {ok, Rest#rest{inhead = orddict:store('Content-Type', NType, InHead)}};
-            [] ->
-               {error, {unsupported, mimetype(Type)}}
-         end
-   end.
-
-%%
-%%
--spec is_content_acceptable(#rest{}) -> {ok, #rest{}} | {error, {not_acceptable, _}}.
-
-is_content_acceptable(#rest{inhead = Head, eghead = EgHead} = Rest) ->
-   Provide = f(Rest, content_provided),
-   Accept  = opts:val('Accept', [{'*', '*'}], Head),
-   case
-      lists:flatmap(restd:negotiate(_, Provide), Accept)
+execute_rest(#state{endpoints = Endpoints, request = Request, entity = Entity}) ->
+   case 
+      endpoints(Endpoints, [], Request#request{entity = deq:list(Entity)})
    of
-      [{_, _} = Type | _] ->
-         % handle content negotiation and preset content type accepted by client 
-         {ok, Rest#rest{eghead = orddict:store('Content-Type', Type, EgHead)}};
-      _ ->
-         {error, {not_acceptable, [mimetype(X) || X <- Accept]}}
-   end.
-
-
-%%
-%%
--spec is_language_acceptable(#rest{}) -> {ok, #rest{}} | {error, {not_acceptable, _}}.
-
-is_language_acceptable(#rest{} = Rest) ->
-   {ok, Rest}.
-
-%%
-%%
--spec is_charset_acceptable(#rest{}) -> {ok, #rest{}} | {error, {not_acceptable, _}}.
-
-is_charset_acceptable(#rest{} = Rest) ->
-   {ok, Rest}.
-
-%%
-%%
--spec is_encoding_acceptable(#rest{}) -> {ok, #rest{}} | {error, {not_acceptable, _}}.
-
-is_encoding_acceptable(#rest{} = Rest) ->
-   {ok, Rest}.
-
-
-%%
-%%
--spec is_resource_exists(#rest{}) -> {ok, #rest{}} | {error, {not_found, _}}.
-
-is_resource_exists(#rest{uri = Uri, eghead = EgHead} = Rest) ->
-   Accept = orddict:fetch('Content-Type', EgHead),
-   case f(Rest, exists, Accept) of
-      true ->
-         {ok, Rest};
-      _    ->
-         {error, {not_found, uri:path(Uri)}}
+      ?EITHER_R(Http) ->
+         packetize(Http);
+      ?EITHER_L(Reasons) ->
+         packetize(fail(Request, Reasons))
    end.
 
 %%
 %%
--spec is_etags_matched(#rest{}) -> {ok, #rest{}} | {error, {not_found, _}}.
-
-is_etags_matched(#rest{} = Rest) ->
-   {ok, Rest}.
-
-%%
-%%
--spec is_modified(#rest{}) -> {ok, #rest{}} | {error, {not_found, _}}.
-
-is_modified(#rest{} = Rest) ->
-   {ok, Rest}.
-
-%%
-%%
--spec execute(#rest{}, _) -> {ok, {_, _, _}} | {error, {atom(), _}}.
-
-execute(#rest{mthd = Mthd, inhead = InHead, eghead = EgHead} = Rest, Entity) ->
-   EgType = opts:val('Content-Type', EgHead),
-   InType = opts:val('Content-Type', undefined, InHead),
-   % REST call returns either Http Type or Xor 
-   case f(Rest, Mthd, {EgType, InType}, Entity) of
-      ?XOR_R(Http) ->
-         packetize(EgHead, Http);
-      ?XOR_L(Reason) ->
-         {error, fail(Rest, Reason)};
-      Http -> 
-         packetize(EgHead, Http)
+execute_stream(#state{endpoints = Endpoints, request = Request, entity = Entity}) ->
+   case 
+      endpoints(Endpoints, [], Request#request{entity = Entity})
+   of
+      ?EITHER_R(Http) ->
+         streaming(Http);
+      ?EITHER_L(Reasons) ->
+         % web-socket is already established, 
+         % we cannot use HTTP status code to indicate routing error
+         % Routing is failed send only error and terminate connection
+         Reason = fail_sort_by(Reasons),
+         {error, Reason}
    end.
 
-packetize(EgHead, {Code, Head0, Entity}) 
- when is_binary(Entity) ->
-   Head1 = orddict:merge(
-      fun(_, _, X) -> X end,
-      orddict:store('Content-Length', size(Entity), EgHead),
-      orddict:from_list(Head0)
-   ),
-   {ok, [{Code, Head1, Entity}]};
-
-packetize(EgHead, {Code, Head0, Entity})
- when is_list(Entity) ->
-   case lists:keyfind('Content-Length', 1, Head0) of
-      false ->
-         Head1 = orddict:merge(
-            fun(_, _, X) -> X end,
-            orddict:store('Content-Length', iolist_size(Entity), EgHead),
-            orddict:from_list(Head0)
-         ),
-         Head2 = orddict:store('Transfer-Encoding', <<"chunked">>, Head1),
-         {ok, [{Code, Head2}|Entity] ++ [<<>>]};
-      _ ->
-         Head1 = orddict:merge(
-            fun(_, _, X) -> X end,
-            EgHead,
-            orddict:from_list(Head0)
-         ),
-         {ok, [{Code, Head1, Entity}]}
+%%
+%%
+endpoints([Head | Tail], Reasons, #request{} = Request) ->
+   case Head(Request) of
+      ?EITHER_R(_) = Result ->
+         Result;
+      ?EITHER_L(Reason) ->
+         endpoints(Tail, [Reason | Reasons], Request)
    end;
 
-packetize(EgHead, {Code, Head0, {s, _, _} = Entity}) ->
-   Head1 = orddict:merge(
-      fun(_, _, X) -> X end,
-      orddict:store('Transfer-Encoding',  <<"chunked">>, EgHead),
-      orddict:from_list(Head0)
-   ),
-   {ok, stream:'++'(stream:new({Code, Head1}), Entity)};
+endpoints([], Reasons, #request{}) ->
+   {error, Reasons}.
 
-packetize(EgHead, {Code, Entity}) ->
-   packetize(EgHead, {Code, [], Entity});
-
-packetize(EgHead, Code)
- when is_atom(Code) orelse is_integer(Code) ->
-   packetize(EgHead, {Code, [], <<>>});
-
-packetize(EgHead, Entity) ->
-   packetize(EgHead, {ok, [], Entity}).
-
-
-%%%------------------------------------------------------------------
-%%%
-%%% private
-%%%
-%%%------------------------------------------------------------------
 
 %%
-%% apply resource function
-f(#rest{mod = Mod, export = Export} = Rest, Fun) ->
-   case lists:keyfind(Fun, 1, Export) of
-      false -> default(Fun);
-      _     -> Mod:Fun(req(Rest))
+%% https://tools.ietf.org/html/rfc7807
+fail(#request{uri = Uri}, Reasons) ->
+   Reason = fail_sort_by(Reasons),
+   {Code, Json} = failwith(Reason, Uri),
+   {Code, [{<<"Content-Type">>, <<"application/json">>}], jsx:encode(Json)}.
+
+
+failwith({Reason, Details}, Uri) ->
+   {Code, Text} = status_code(Reason),
+   {Code, 
+      #{
+         type     => uri:s(uri:segments([Code], uri:new(<<"https://httpstatuses.com">>))),
+         instance => uri:s(Uri),
+         title    => Text,
+         details  => scalar:s([scalar:s(Reason), $:, $ , scalar:s(Details)])
+      }
+   };
+
+failwith(Reason, Uri) ->
+   {Code, Text} = status_code(Reason),
+   {Code, 
+      #{
+         type     => uri:s(uri:segments([Code], uri:new(<<"https://httpstatuses.com">>))),
+         instance => uri:s(Uri),         
+         title    => Text,
+         details  => scalar:s(Reason)
+      }
+   }.
+
+fail_sort_by(Reasons) ->
+   hd(lists:sort(
+      fun(A, B) -> 
+         fail_priority(A) =< fail_priority(B)
+      end,
+      Reasons
+   )).
+
+fail_priority({not_available, _}) -> 1000;
+fail_priority({not_allowed, _}) -> 990;
+fail_priority({not_acceptable, _}) -> 820;
+fail_priority({unsupported, _}) -> 800;
+fail_priority({unauthorized, _}) -> 520;
+fail_priority({forbidden, _}) -> 500;
+fail_priority({badarg, _}) -> 10;
+fail_priority(_) -> 1.
+
+
+%%
+%%
+packetize({Code, Head, {s, _, _} = Stream}) ->
+   {HtCode, HtText} = status_code(Code),
+   HtHead = [{<<"Transfer-Encoding">>, <<"chunked">>} | Head],
+   {ok,
+      stream:'++'(
+         stream:'++'(
+            stream:new({HtCode, HtText, HtHead}), 
+            stream:map(fun(X) -> {packet, X} end, Stream)
+         ),
+         stream:new(eof)
+      )
+   };
+
+packetize({Code, Head, Entity}) ->
+   {HtCode, HtText} = status_code(Code),
+   HtEntity = encode(Head, Entity),
+   HtHead   = [{<<"Content-Length">>, iolist_size(HtEntity)} | Head],
+   {ok, 
+      lists:flatten([
+         {HtCode, HtText, HtHead},
+         [{packet, X} || X <- HtEntity],
+         eof
+      ])
+   }.
+
+encode(Head, Entity) ->
+   case lens:get(lens:pair(<<"Content-Encoding">>, undefined), Head) of
+      <<"gzip">> ->
+         [zlib:gzip([Entity])];
+      <<"deflate">> ->
+         [zlib:compress([Entity])];
+      _ ->
+         lists:flatten([Entity])
    end.
 
-f(#rest{mod = Mod, export = Export} = Rest, Fun, X) ->
-   case lists:keyfind(Fun, 1, Export) of
-      false -> default(Fun);
-      _     -> Mod:Fun(X, req(Rest))
-   end.
-
-f(#rest{mod = Mod, export = Export} = Rest, Fun, X, Y) ->
-   case lists:keyfind(Fun, 1, Export) of
-      false -> default(Fun);
-      _     -> Mod:Fun(X, Y, req(Rest))
-   end.
-
 %%
 %%
-fail(#rest{mod = Mod, export = Export} = Rest, Reason) ->
-   case lists:keyfind(fail, 1, Export) of
-      false -> fail(Reason);
-      _     -> Mod:fail(Reason, req(Rest))   
-   end.
+streaming({s, _, _} = Stream) ->
+   {ok, stream:map(fun(X) -> {packet, X} end, Stream)};
 
-fail(Reason)
- when is_atom(Reason) ->
-   {Reason, scalar:s(Reason)};
-
-fail(Reason) ->
-   {500, scalar:s(io_lib:format("~p~n", [Reason]))}.
-
-%%
-%% build a resource context 
-req(#rest{uri = Url, inhead = Head, env = Env}) ->
-   {Url, Head, Env}.
-
-%%
-%%
-default(allowed_methods)  -> 
-   ['GET', 'HEAD', 'OPTIONS'];
-
-default(authorize)        -> 
-   ok;
-
-default(content_accepted) -> 
-   [];
-
-default(content_provided) -> 
-   [{application, json}];
-
-default(exists)           -> 
-   true;
-
-default(cors)             -> 
-   [
-      {'Access-Control-Allow-Methods', <<"GET, PUT, POST, DELETE, OPTIONS">>}
-     ,{'Access-Control-Allow-Headers', <<"Content-Type">>}
-     ,{'Access-Control-Max-Age', 600}
-   ].
+streaming(Entity) ->
+   {ok,
+      [{packet, X} || X <- lists:flatten([Entity])]
+   }.
 
 
-mimetype({Major, Minor}) ->
-   <<(scalar:s(Major))/binary, $/, (scalar:s(Minor))/binary>>.
+%% encode rest api status code response
+status_code(100) -> {100, <<"Continue">>};
+status_code(101) -> {101, <<"Switching Protocols">>};
+status_code(200) -> {200, <<"OK">>};
+status_code(201) -> {201, <<"Created">>};
+status_code(202) -> {202, <<"Accepted">>};
+status_code(203) -> {203, <<"Non-Authoritative Information">>};
+status_code(204) -> {204, <<"No Content">>};
+status_code(205) -> {205, <<"Reset Content">>};
+status_code(206) -> {206, <<"Partial Content">>};
+status_code(300) -> {300, <<"Multiple Choices">>};
+status_code(301) -> {301, <<"Moved Permanently">>};
+status_code(302) -> {302, <<"Found">>};
+status_code(303) -> {303, <<"See Other">>};
+status_code(304) -> {304, <<"Not Modified">>};
+status_code(307) -> {307, <<"Temporary Redirect">>};
+status_code(400) -> {400, <<"Bad Request">>};
+status_code(401) -> {401, <<"Unauthorized">>};
+status_code(402) -> {402, <<"Payment Required">>};
+status_code(403) -> {403, <<"Forbidden">>};
+status_code(404) -> {404, <<"Not Found">>};
+status_code(405) -> {405, <<"Method Not Allowed">>};
+status_code(406) -> {406, <<"Not Acceptable">>};
+status_code(407) -> {407, <<"Proxy Authentication Required">>};
+status_code(408) -> {408, <<"Request Timeout">>};
+status_code(409) -> {409, <<"Conflict">>};
+status_code(410) -> {410, <<"Gone">>};
+status_code(411) -> {411, <<"Length Required">>};
+status_code(412) -> {412, <<"Precondition Failed">>};
+status_code(413) -> {413, <<"Request Entity Too Large">>};
+status_code(414) -> {414, <<"Request-URI Too Long">>};
+status_code(415) -> {415, <<"Unsupported Media Type">>};
+status_code(416) -> {416, <<"Requested Range Not Satisfiable">>};
+status_code(417) -> {417, <<"Expectation Failed">>};
+status_code(422) -> {422, <<"Unprocessable Entity">>};
+status_code(500) -> {500, <<"Internal Server Error">>};
+status_code(501) -> {501, <<"Not Implemented">>};
+status_code(502) -> {502, <<"Bad Gateway">>};
+status_code(503) -> {503, <<"Service Unavailable">>};
+status_code(504) -> {504, <<"Gateway Timeout">>};
+status_code(505) -> {505, <<"HTTP Version Not Supported">>};
 
-
-%%%------------------------------------------------------------------
-%%%
-%%% STREAM
-%%%
-%%%------------------------------------------------------------------   
-
-% 'STREAM'({http, _Url, eof}, _Pipe, S) ->
-%  % @todo: use http eof as a trigger for resource invocation
-%    {next_state, 'STREAM', S};
-
-% %%
-% %% handles message from "external" processes, pipe binds either
-% %%  "process" <-> "http" (if external process support pipe protocol)
-% %%  "http"    <-> undefined
-% 'STREAM'(Msg, Pipe, #fsm{resource=Mod, request=Req, content=Type}=S) ->
-%  try
-%     case Mod:stream(Type, Req, pipe:a(Pipe), Msg) of
-%        eof  -> 
-%           pipe:send(pipe_sink(Pipe), <<>>),
-%           {next_state, 'ACCEPT', S};
-%        undefined ->
-%           {next_state, 'STREAM', S};
-%        Http -> 
-%           pipe:send(pipe_sink(Pipe), Http),
-%           {next_state, 'STREAM', S}
-%     end
-%  catch _:Reason ->
-%     lager:notice("restd request error ~p: ~p", [Reason, erlang:get_stacktrace()]),
-%     pipe:send(pipe_sink(Pipe), handle_failure(Reason)),
-%     {next_state, 'ACCEPT', S}
-%  end.
-
+%status_code(100) -> <<"100 Continue">>;
+%status_code(101) -> <<"101 Switching Protocols">>;
+status_code(ok)       -> status_code(200);
+status_code(created)  -> status_code(201);
+status_code(accepted) -> status_code(202);
+%status(203) -> <<"203 Non-Authoritative Information">>;
+status_code(no_content) -> status_code(204);
+%status(205) -> <<"205 Reset Content">>;
+%status(206) -> <<"206 Partial Content">>;
+%status(300) -> <<"300 Multiple Choices">>;
+%status(301) -> <<"301 Moved Permanently">>;
+status_code(redirect) -> status_code(302);
+%status(303) -> <<"303 See Other">>;
+%status(304) -> <<"304 Not Modified">>;
+%status(307) -> <<"307 Temporary Redirect">>;
+status_code(badarg) -> status_code(400);
+status_code(unauthorized) -> status_code(401);
+%status(402) -> <<"402 Payment Required">>;
+status_code(forbidden) -> status_code(403);
+status_code(not_found) -> status_code(404);
+status_code(enoent)    -> status_code(404);
+status_code(not_allowed)    -> status_code(405);
+status_code(not_acceptable) -> status_code(406);
+%status(407) -> <<"407 Proxy Authentication Required">>;
+%status(408) -> <<"408 Request Timeout">>;
+status_code(conflict) -> status_code(409);
+status_code(duplicate)-> status_code(409);
+%status(410) -> <<"410 Gone">>;
+%status(411) -> <<"411 Length Required">>;
+%status(412) -> <<"412 Precondition Failed">>;
+%status(413) -> <<"413 Request Entity Too Large">>;
+%status(414) -> <<"414 Request-URI Too Long">>;
+status_code(bad_mime_type) -> status_code(415);
+%status(416) -> <<"416 Requested Range Not Satisfiable">>;
+%status(417) -> <<"417 Expectation Failed">>;
+%status(422) -> <<"422 Unprocessable Entity">>;
+status_code(not_implemented) -> status_code(501);
+%status(502) -> <<"502 Bad Gateway">>;
+status_code(not_available) -> status_code(503);
+%status(504) -> <<"504 Gateway Timeout">>;
+%status(505) -> <<"505 HTTP Version Not Supported">>.
+status_code(_) -> status_code(500).
