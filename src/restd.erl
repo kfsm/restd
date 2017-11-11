@@ -46,14 +46,12 @@
    cors/2,
    cors/3,
    accesslog/2,
-   to_json/1,
-   to_json/2,
-   to_json/3,
+   to_json/1, to_json/2, to_json/3,
    as_json/1,
-   to_text/1,
-   to_text/2,
-   to_text/3,
-   as_text/1
+   to_text/1, to_text/2, to_text/3,
+   as_text/1,
+   to_form/1, to_form/2, to_form/3,
+   as_form/1
 ]).
 
 
@@ -416,7 +414,29 @@ to_text(Code, Head, Text) ->
 as_text(#request{entity = Entity}) ->
    {ok, Entity}.
 
-   
+
+%%
+%% encode result as json
+-spec to_form(_) -> response().
+
+to_form(Form) ->
+   to_form([], Form).
+
+to_form(Head, Form) ->
+   to_form(200, Head, Form).
+
+to_form(Code, Head, Form) ->
+   {ok,
+      {Code, [{<<"Content-Type">>, <<"application/x-www-form-urlencoded">>} | Head], restd_codec:encode_form(Form)}
+   }.
+
+%%
+%% decode request payload as application/x-www-form-urlencoded
+-spec as_form(_) -> _.
+
+as_form(#request{entity = Entity}) ->
+   {ok, restd_codec:decode_form(Entity)}.
+
 %%%----------------------------------------------------------------------------   
 %%%
 %%% private
