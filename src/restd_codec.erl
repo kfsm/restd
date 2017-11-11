@@ -9,11 +9,15 @@
 %%
 %%
 encode_form(Form) ->
-   [identity ||
-      maps:to_list(Form),
-      lists:map(fun to_pair/1, _),
-      scalar:s(lists:join(<<$&>>, _))
-   ].
+   try
+      {ok, [identity ||
+         maps:to_list(Form),
+         lists:map(fun to_pair/1, _),
+         scalar:s(lists:join(<<$&>>, _))
+      ]}
+   catch _:_ ->
+      {error, {badarg, payload}}
+   end.
 
 to_pair(Pair) ->
    scalar:s(
@@ -24,11 +28,16 @@ to_pair(Pair) ->
 
 
 decode_form(Form) ->
-   [identity ||
-      binary:split(scalar:s(Form), <<$&>>, [trim, global]),
-      lists:map(fun as_pair/1, _),
-      maps:from_list(_)
-   ].
+   try
+      {ok, [identity ||
+         binary:split(scalar:s(Form), <<$&>>, [trim, global]),
+         lists:map(fun as_pair/1, _),
+         maps:from_list(_)
+      ]}
+   catch _:_ ->
+      {error, {badarg, payload}}
+   end.
+   
 
 as_pair(Pair) ->
    erlang:list_to_tuple(

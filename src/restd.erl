@@ -426,16 +426,17 @@ to_form(Head, Form) ->
    to_form(200, Head, Form).
 
 to_form(Code, Head, Form) ->
-   {ok,
-      {Code, [{<<"Content-Type">>, <<"application/x-www-form-urlencoded">>} | Head], restd_codec:encode_form(Form)}
-   }.
+   [either ||
+      restd_codec:encode_form(Form),
+      cats:unit({Code, [{<<"Content-Type">>, <<"application/x-www-form-urlencoded">>} | Head], _})
+   ].
 
 %%
 %% decode request payload as application/x-www-form-urlencoded
 -spec as_form(_) -> _.
 
 as_form(#request{entity = Entity}) ->
-   {ok, restd_codec:decode_form(Entity)}.
+   restd_codec:decode_form(Entity).
 
 %%%----------------------------------------------------------------------------   
 %%%
