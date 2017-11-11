@@ -7,7 +7,6 @@
 *.tgz
 log/
 rebar3
-rebar.lock
 tests/
 *.sublime-*
 _build/
