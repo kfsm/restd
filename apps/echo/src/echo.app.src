@@ -2,15 +2,12 @@
    [
       {description, "restd example echo service (aka httpbin)"},
       {vsn,         "0.0.0"},
-      {modules,     [
-         echo,
-         echo_sup,
-         echo_app
-      ]},
+      {modules,     []},
       {registered,  []},
       {applications,[
          kernel, 
          stdlib,
+         lager,
          restd
       ]},
       {mod, {echo_app, []}},

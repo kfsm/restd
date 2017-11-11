@@ -21,7 +21,7 @@
   0},
  {<<"knet">>,
   {git,"https://github.com/kfsm/knet.git",
-       {ref,"eae40c651d5d174eec63f13ed2a8ace316a7fd5e"}},
+       {ref,"ae328b9f7baed27df897492f07004522a384b12d"}},
   0},
  {<<"lager">>,
   {git,"https://github.com/basho/lager",
