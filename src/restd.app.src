@@ -8,7 +8,6 @@
          kernel, 
          stdlib,
          knet,
-         hornlog,
          jsx
       ]},
       {mod, {restd_app, []}},
