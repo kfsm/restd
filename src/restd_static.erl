@@ -21,7 +21,8 @@
 -compile({parse_transform, category}).
 
 -export([
-   reader/2
+   reader/2,
+   reader/3
 ]).
 
 
@@ -29,13 +30,34 @@
 %% returns static file
 %%
 reader(Pattern, Root) ->
+   reader(Pattern, [], Root).
+   
+reader(Pattern, SubPath, Root) ->
    [reader ||
       Path /= restd:path(Pattern),
          _ /= restd:method('GET'),
-      File <- filename(Root, Path),
+      File <- filename(Root, segments(subpath(SubPath), Path)),
       readfile(File),
       sendfile(File, _)
    ].
+
+%%
+%%
+subpath(Path) ->
+   case filename:split(scalar:s(Path)) of
+      [<<$/>> | Segments] ->
+         Segments;
+
+      Segments ->
+         Segments
+   end.
+
+%%
+%%
+segments([], Path) ->
+   Path;
+segments([A | SubPath], [A | Path]) ->
+   segments(SubPath, Path).
 
 %%
 %%
@@ -45,16 +67,16 @@ filename(Root, Path)
 
 filename(Root, Path) ->
    {ok, 
-      scalar:s(filename:join([scalar:s(Root), path_to_filename(Path)]))
+      scalar:s(filename:join([scalar:s(Root) | path_to_filename(Path)]))
    }.
 
 path_to_filename([]) ->
    [ "index.html" ];
 path_to_filename(Segments) ->
-   segments(Segments).
+   validate_filename(Segments).
 
-segments(Segments) ->
-   [scalar:s(X) || X <- Segments, X =/= <<".">>, X =/= <<"..">>, X =/= <<$~>>].
+validate_filename(Segments) ->
+   [scalar:s(X) || X <- Segments, X =/= <<$.>>, X =/= <<$., $.>>, X =/= <<$~>>].
 
 %%
 %%
