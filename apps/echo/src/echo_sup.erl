@@ -52,6 +52,5 @@ endpoints() ->
       echo_restapi:stream(),
       echo_restapi:websocket(),
 
-      restd_static:reader("/", echo),
-      restd_static:reader("/_", echo)
+      restd_static:reader("/*", echo)
    ].
