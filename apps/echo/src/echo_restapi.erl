@@ -249,10 +249,10 @@ redirect_n() ->
    ].
 
 redirect([_, <<"1">>]) ->
-   restd:to_text(redirect, [{<<"Location">>, <<"/get">>}], <<>>);
+   restd:to_text(redirect, [{<<"Location">>, <<"/get">>}], <<$ >>);
 
 redirect([_, N]) ->
-   restd:to_text(redirect, [{<<"Location">>, <<"/redirect/", (scalar:s(scalar:i(N) - 1))/binary>>}], <<>>).
+   restd:to_text(redirect, [{<<"Location">>, <<"/redirect/", (scalar:s(scalar:i(N) - 1))/binary>>}], <<$ >>).
 
 %%
 %% Returns cookie data.

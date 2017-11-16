@@ -15,14 +15,15 @@
 %%   See the License for the specific language governing permissions and
 %%   limitations under the License.
 %%
-%% @description
+%% @doc
 %%    support for static file
 -module(restd_static).
 -compile({parse_transform, category}).
 
 -export([
    reader/2,
-   reader/3
+   reader/3,
+   react/3
 ]).
 
 
@@ -40,6 +41,15 @@ reader(Pattern, SubPath, Root) ->
       readfile(File),
       sendfile(File, _)
    ].
+
+%%
+%% host react application 
+react(Path, Root, ReactApp) ->
+   Pattern    = filename:join([Path, "*"]), 
+   StaticRoot = filename:join([code:priv_dir(Root), ReactApp, build]),
+   restd_static:reader(Pattern, Path, StaticRoot).
+
+
 
 %%
 %%
