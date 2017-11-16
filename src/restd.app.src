@@ -1,6 +1,6 @@
 {application, restd,
    [
-      {description, "rest api acceptor"},
+      {description, "http service combinator library"},
       {vsn,         "1.4.1"},
       {modules,     []},
       {registered,  []},
