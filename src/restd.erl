@@ -374,6 +374,12 @@ to_json(Json) ->
 to_json(Head, Json) ->
    to_json(200, Head, Json).
 
+to_json(Code, Head, {ok, Json}) ->
+   to_json(Code, Head, Json);
+
+to_json(_, Head, {error, Reason}) ->
+   to_error(Reason, Head);
+
 to_json(Code, Head, Json) ->
    {ok,
       {Code, [{<<"Content-Type">>, <<"application/json">>} | Head], jsx:encode(Json)}
@@ -402,6 +408,12 @@ to_text(Text) ->
 to_text(Head, Text) ->
    to_json(200, Head, Text).
 
+to_text(Code, Head, {ok, Text}) ->
+   to_text(Code, Head, Text);
+
+to_text(_, Head, {error, Reason}) ->
+   to_error(Reason, Head);
+
 to_text(Code, Head, Text) ->
    {ok,
       {Code, [{<<"Content-Type">>, <<"text/plain">>} | Head], scalar:s(Text)}
@@ -425,6 +437,12 @@ to_form(Form) ->
 to_form(Head, Form) ->
    to_form(200, Head, Form).
 
+to_form(Code, Head, {ok, Form}) ->
+   to_form(Code, Head, Form);
+
+to_form(_, Head, {error, Reason}) ->
+   to_error(Reason, Head);
+
 to_form(Code, Head, Form) ->
    [either ||
       restd_codec:encode_form(Form),
@@ -437,6 +455,15 @@ to_form(Code, Head, Form) ->
 
 as_form(#request{entity = Entity}) ->
    restd_codec:decode_form(Entity).
+
+%%
+%% encode error to HTTP failure
+%% @todo: support https://tools.ietf.org/html/rfc7807 
+to_error(Reason, Head) ->
+   {ok,
+      {Reason, Head, <<>>}
+   }.
+
 
 %%%----------------------------------------------------------------------------   
 %%%
