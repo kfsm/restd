@@ -98,6 +98,7 @@ status_code(redirect) -> status_code(302);
 %status(307) -> <<"307 Temporary Redirect">>;
 status_code(badarg) -> status_code(400);
 status_code(unauthorized) -> status_code(401);
+status_code(expired) -> status_code(401);
 %status(402) -> <<"402 Payment Required">>;
 status_code(forbidden) -> status_code(403);
 status_code(not_found) -> status_code(404);
