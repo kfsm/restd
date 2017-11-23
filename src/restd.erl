@@ -46,11 +46,11 @@
    cors/2,
    cors/3,
    accesslog/2,
-   to_json/1, to_json/2, to_json/3,
+   to_json/2, to_json/3, to_json/4,
    as_json/1,
-   to_text/1, to_text/2, to_text/3,
+   to_text/2, to_text/3, to_text/4,
    as_text/1,
-   to_form/1, to_form/2, to_form/3,
+   to_form/2, to_form/3, to_form/4,
    as_form/1
 ]).
 
@@ -366,18 +366,24 @@ accesslog({ok, Response}, Request) ->
 
 %%
 %% encode result as json
--spec to_json(_) -> response().
+-spec to_json(_, request()) -> response().
+-spec to_json(_, _, request()) -> response().
+-spec to_json(_, _, _, request()) -> response().
 
-to_json(Json) ->
-   to_json([], Json).
+to_json(Json, Request) ->
+   to_json([], Json, Request).
 
-to_json(Head, Json) ->
-   to_json(200, Head, Json).
+to_json(Head, {ok, Json}, Request) ->
+   to_json(200, Head, Json, Request);
 
-to_json(Code, Head, Json) ->
+to_json(_, {error, Reason}, #request{uri = Uri}) ->
+   {ok, restd_codec:encode_error(Uri, Reason)}.
+
+to_json(Code, Head, Json, _Request) ->
    {ok,
       {Code, [{<<"Content-Type">>, <<"application/json">>} | Head], jsx:encode(Json)}
-   }.
+   }. 
+
 
 %%
 %% decode payload as json
@@ -394,15 +400,21 @@ as_json(#request{entity = Entity}) ->
 
 %%
 %% encode result as plain text
--spec to_text(_) -> response().
+-spec to_text(_, request()) -> response().
+-spec to_text(_, _, request()) -> response().
+-spec to_text(_, _, _, request()) -> response().
 
-to_text(Text) ->
-   to_text([], Text).
+to_text(Text, Request) ->
+   to_text([], Text, Request).
 
-to_text(Head, Text) ->
-   to_json(200, Head, Text).
+to_text(Head, {ok, Text}, Request) ->
+   to_text(200, Head, Text, Request);
 
-to_text(Code, Head, Text) ->
+to_text(_, {error, Reason}, #request{uri = Uri}) ->
+   {ok, restd_codec:encode_error(Uri, Reason)}.
+
+
+to_text(Code, Head, Text, _Request) ->
    {ok,
       {Code, [{<<"Content-Type">>, <<"text/plain">>} | Head], scalar:s(Text)}
    }.
@@ -417,15 +429,20 @@ as_text(#request{entity = Entity}) ->
 
 %%
 %% encode result as json
--spec to_form(_) -> response().
+-spec to_form(_, request()) -> response().
+-spec to_form(_, _, request()) -> response().
+-spec to_form(_, _, _, request()) -> response().
 
-to_form(Form) ->
-   to_form([], Form).
+to_form(Form, Request) ->
+   to_form([], Form, Request).
 
-to_form(Head, Form) ->
-   to_form(200, Head, Form).
+to_form(Head, {ok, Form}, Request) ->
+   to_form(200, Head, Form, Request);
 
-to_form(Code, Head, Form) ->
+to_form(_, {error, Reason}, #request{uri = Uri}) ->
+   {ok, restd_codec:encode_error(Uri, Reason)}.
+
+to_form(Code, Head, Form, _Request) ->
    [either ||
       restd_codec:encode_form(Form),
       cats:unit({Code, [{<<"Content-Type">>, <<"application/x-www-form-urlencoded">>} | Head], _})
@@ -437,6 +454,7 @@ to_form(Code, Head, Form) ->
 
 as_form(#request{entity = Entity}) ->
    restd_codec:decode_form(Entity).
+
 
 %%%----------------------------------------------------------------------------   
 %%%

@@ -23,7 +23,7 @@ init([]) ->
       {
          {one_for_one, 4, 1800},
          [
-            restd:spec(endpoints(), [{port, "http://*:8888"}, {backlog, 1024}])
+            restd:spec(endpoints(), [{port, "http://*:8889"}, {backlog, 1024}])
          ]
       }
    }.
@@ -48,6 +48,8 @@ endpoints() ->
       echo_restapi:response_header(),
       echo_restapi:redirect_n(),
       echo_restapi:cookies(),
+      echo_restapi:cookies_set(),
+      echo_restapi:cookies_del(),
       echo_restapi:accesslog(),
       echo_restapi:stream(),
       echo_restapi:websocket(),

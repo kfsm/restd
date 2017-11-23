@@ -23,6 +23,8 @@
    response_header/0,
    redirect_n/0,
    cookies/0,
+   cookies_set/0,
+   cookies_del/0,
    accesslog/0,
    stream/0,
    websocket/0
@@ -37,7 +39,7 @@ ipaddr_json() ->
       _ /= restd:method('GET'),
       _ /= restd:provided_content({application, json}),
       Peer /= restd:header(<<"X-Knet-Peer">>),
-      restd:to_json(#{ip => Peer})
+      _ /= restd:to_json({ok, #{ip => Peer}})
    ].
 
 
@@ -46,7 +48,7 @@ ipaddr_text() ->
       _ /= restd:path("/ip/text"),
       _ /= restd:method('GET'),
       Peer /= restd:header(<<"X-Knet-Peer">>),
-      restd:to_text(Peer)
+      _ /= restd:to_text({ok, Peer})
    ].
 
 
@@ -57,7 +59,7 @@ user_agent() ->
    [reader ||
       _ /= restd:path("/user-agent"),
       UA /= restd:header(<<"User-Agent">>),
-      restd:to_json(#{'user-agent' => UA})
+      _ /= restd:to_json({ok, #{'user-agent' => UA}})
    ].
 
 %%
@@ -69,7 +71,7 @@ headers() ->
       _ /= restd:method('GET'),
       _ /= restd:provided_content({application, json}),
       Head /= restd:headers(),
-      restd:to_json(#{headers => Head})
+      _ /= restd:to_json({ok, #{headers => Head}})
    ].
 
 %%
@@ -81,7 +83,7 @@ get() ->
       Mthd /= restd:method('GET'),
       Head /= restd:headers(),
       Peer /= restd:header(<<"X-Knet-Peer">>),
-      restd:to_json(#{headers => Head, peer => Peer, url => uri:s(Url), method => Mthd})
+         _ /= restd:to_json({ok, #{headers => Head, peer => Peer, url => uri:s(Url), method => Mthd}})
    ].
 
 %%
@@ -95,7 +97,7 @@ post() ->
       Peer /= restd:header(<<"X-Knet-Peer">>),
          _ /= restd:accepted_content({'*', '*'}),
       Data /= restd:as_text(),
-      restd:to_json(#{headers => Head, peer => Peer, url => uri:s(Url), method => Mthd, data => Data})
+         _ /= restd:to_json({ok, #{headers => Head, peer => Peer, url => uri:s(Url), method => Mthd, data => Data}})
    ].
 
 %%
@@ -109,7 +111,7 @@ post_json() ->
       Peer /= restd:header(<<"X-Knet-Peer">>),
          _ /= restd:accepted_content({application, json}),
       Json /= restd:as_json(),
-      restd:to_json(#{headers => Head, peer => Peer, url => uri:s(Url), method => Mthd, data => Json})
+         _ /= restd:to_json({ok, #{headers => Head, peer => Peer, url => uri:s(Url), method => Mthd, data => Json}})
    ].
 
 %%
@@ -123,7 +125,7 @@ put() ->
       Peer /= restd:header(<<"X-Knet-Peer">>),
          _ /= restd:accepted_content({'*', '*'}),
       Data /= restd:as_text(),
-      restd:to_json(#{headers => Head, peer => Peer, url => uri:s(Url), method => Mthd, data => Data})
+         _ /= restd:to_json({ok, #{headers => Head, peer => Peer, url => uri:s(Url), method => Mthd, data => Data}})
    ].
 
 %%
@@ -137,7 +139,7 @@ patch() ->
       Peer /= restd:header(<<"X-Knet-Peer">>),
          _ /= restd:accepted_content({'*', '*'}),
       Data <- restd:as_text(),
-      restd:to_json(#{headers => Head, peer => Peer, url => uri:s(Url), method => Mthd, data => Data})
+         _ /= restd:to_json({ok, #{headers => Head, peer => Peer, url => uri:s(Url), method => Mthd, data => Data}})
    ].
 
 
@@ -150,9 +152,9 @@ delete() ->
       Mthd /= restd:method('DELETE'),
       Head /= restd:headers(),
       Peer /= restd:header(<<"X-Knet-Peer">>),
-        _  /= restd:accepted_content({'*', '*'}),
+         _ /= restd:accepted_content({'*', '*'}),
       Data <- restd:as_text(),
-      restd:to_json(#{headers => Head, peer => Peer, url => uri:s(Url), method => Mthd, data => Data})
+         _ /= restd:to_json({ok, #{headers => Head, peer => Peer, url => uri:s(Url), method => Mthd, data => Data}})
    ].
 
 %%
@@ -182,8 +184,8 @@ deflate() ->
       Head /= restd:headers(),
       Peer /= restd:header(<<"X-Knet-Peer">>),
       Encoding /= restd:provided_encoding(deflate), 
-      restd:to_json([Encoding],
-         #{headers => Head, peer => Peer, url => uri:s(Url), method => Mthd})
+         _ /= restd:to_json([Encoding],
+                  {ok, #{headers => Head, peer => Peer, url => uri:s(Url), method => Mthd}})
    ].
 
 %%
@@ -196,8 +198,8 @@ gzip() ->
       Head /= restd:headers(),
       Peer /= restd:header(<<"X-Knet-Peer">>),
       Encoding /= restd:provided_encoding(gzip), 
-      restd:to_json([Encoding],
-         #{headers => Head, peer => Peer, url => uri:s(Url), method => Mthd})
+         _ /= restd:to_json([Encoding],
+                  {ok, #{headers => Head, peer => Peer, url => uri:s(Url), method => Mthd}})
    ].
 
 %%
@@ -210,8 +212,8 @@ compress() ->
       Head /= restd:headers(),
       Peer /= restd:header(<<"X-Knet-Peer">>),
       Encoding /= restd:provided_encoding(), 
-      restd:to_json([Encoding],
-         #{headers => Head, peer => Peer, url => uri:s(Url), method => Mthd})
+         _ /= restd:to_json([Encoding],
+                  {ok, #{headers => Head, peer => Peer, url => uri:s(Url), method => Mthd}})
    ].
 
 %%
@@ -221,11 +223,11 @@ status_code() ->
    [reader ||
       Path /= restd:path("/status/_"),
          _ /= restd:method('GET'),
-      do_status_code(Path)
+      Code <- do_status_code(Path),
+        _  /= restd:to_text(scalar:i(Code), [], ["-=[ ", Code, " ]=-"])
    ].
 
-do_status_code([_, Code]) ->
-   restd:to_text(scalar:i(Code), [], ["-=[ ", Code, " ]=-"]).
+do_status_code([_, Code]) -> {ok, Code}.
 
 %%
 %% Return given response headers
@@ -235,7 +237,7 @@ response_header() ->
       _ /= restd:path("/response-headers"),
       _ /= restd:method('GET'),
       Query /= restd:q(),
-      restd:to_json(Query, Query)
+      _ /= restd:to_json(Query, {ok, Query})
    ].
 
 %%
@@ -245,14 +247,15 @@ redirect_n() ->
    [reader ||
       Path /= restd:path("/redirect/_"),
          _ /= restd:method('GET'),
-      redirect(Path)
+       Uri <- redirect(Path),
+         _ /= restd:to_text(redirect, [{<<"Location">>, Uri}], <<$ >>)
    ].
 
 redirect([_, <<"1">>]) ->
-   restd:to_text(redirect, [{<<"Location">>, <<"/get">>}], <<$ >>);
+   {ok, <<"/get">>};
 
 redirect([_, N]) ->
-   restd:to_text(redirect, [{<<"Location">>, <<"/redirect/", (scalar:s(scalar:i(N) - 1))/binary>>}], <<$ >>).
+   {ok, <<"/redirect/", (scalar:s(scalar:i(N) - 1))/binary>>}.
 
 %%
 %% Returns cookie data.
@@ -261,23 +264,35 @@ redirect([_, N]) ->
 %%
 cookies() ->
    [reader ||
-      Path /= restd:path("/cookies/*"),
+         _ /= restd:path("/cookies"),
          _ /= restd:method('GET'),
       Cookie /= restd:header(<<"Cookie">>),
-      Values /= restd:q(),
-      cookies(Path, Cookie, Values)
+         _ /= restd:to_json({ok, #{cookies => Cookie}})
    ].
 
-cookies([_], Cookies, _) ->
-   restd:to_json(#{cookies => Cookies});
+cookies_set() ->
+   [reader ||
+         _ /= restd:path("/cookies/set"),
+         _ /= restd:method('GET'),
+      Values /= restd:q(),
+      Cookie <- set_cookies(Values),
+         _ /= restd:to_json(redirect, [{<<"Location">>, <<"/cookies">>} | Cookie], <<>>)
+   ].
 
-cookies([_, <<"set">>], _, Values) ->
-   Head = [set_cookie(Key, Val) || {Key, Val} <- Values],
-   restd:to_text(redirect, [{<<"Location">>, <<"/cookies">>} | Head], <<>>);
+cookies_del() ->
+   [reader ||
+         _ /= restd:path("/cookies/delete"),
+         _ /= restd:method('GET'),
+      Values /= restd:q(),
+      Cookie <- del_cookies(Values),
+         _ /= restd:to_json(redirect, [{<<"Location">>, <<"/cookies">>} | Cookie], <<>>)
+   ].
 
-cookies([_, <<"delete">>], _, Values) ->
-   Head = [set_cookie(Key) || Key <- Values],
-   restd:to_text(redirect, [{<<"Location">>, <<"/cookies">>} | Head], <<>>).
+set_cookies(Values) ->
+   {ok, [set_cookie(Key, Val) || {Key, Val} <- Values]}.
+
+del_cookies(Values) ->   
+   {ok, [set_cookie(Key) || Key <- Values]}.
 
 set_cookie(Key, Val) ->
    {<<"Set-Cookie">>, <<(scalar:s(Key))/binary, $=, (scalar:s(Val))/binary, $;, "Path=/">>}.
@@ -292,7 +307,8 @@ accesslog() ->
       _ /= restd:path("/accesslog"),
       _ /= restd:method('GET'),
       Peer /= restd:header(<<"X-Knet-Peer">>),
-      _ /= restd:accesslog(restd:to_text(Peer))
+      Http /= restd:to_text({ok, Peer}),
+      _ /= restd:accesslog(Http)
    ].   
 
 
