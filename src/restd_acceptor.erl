@@ -217,8 +217,10 @@ free(_Reason, _State) ->
 %%
 %%
 execute_rest(#state{endpoints = Endpoints, request = Request, entity = Entity}) ->
+   HttpEntity = deq:list(Entity),
+   ?DEBUG("~p~n~p~n", [Request, HttpEntity]),
    case 
-      endpoints(Endpoints, [], Request#request{entity = deq:list(Entity)})
+      endpoints(Endpoints, [], Request#request{entity = HttpEntity})
    of
       ?EITHER_R(Http) ->
          packetize(Http);
