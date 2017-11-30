@@ -8,3 +8,10 @@
    uri    = undefined :: uri:uri(),       %% resource URI
    entity = undefined :: _                %% HTTP payload 
 }).
+
+
+-ifdef(CONFIG_DEBUG).
+   -define(DEBUG(Str, Args), lager:debug(Str, Args)).
+-else.
+   -define(DEBUG(Str, Args), ok).
+-endif.
