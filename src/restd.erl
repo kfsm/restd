@@ -113,7 +113,7 @@ path(Path, #request{uri = Uri}) ->
    path(
       uri:segments(uri:path(Path, Uri)), 
       uri:segments(Uri), 
-      [{<<"path">>, uri:path(Uri)} | uri:q(Uri)]
+      [{<<"path">>, uri:path(Uri)} | path_to_env(Uri)]
    ).
 
 path([<<$_>>|A], [_|B], Env) ->
@@ -134,6 +134,12 @@ path([], [], Env) ->
 path(_, _, Env) ->
    {error, {not_available, lens:get(lens:pair(<<"path">>), Env)}}.
    
+path_to_env(Uri) ->
+   case uri:q(Uri) of
+      undefined -> [];
+      Query     -> Query
+   end.
+
 %%
 %% matches path segments and return url
 -spec url(uri:path(), request()) -> datum:either( uri:uri() ).
