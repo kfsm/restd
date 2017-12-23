@@ -106,30 +106,33 @@ spec(Routes, Opts) ->
 %%%----------------------------------------------------------------------------   
 
 %%
-%% matches path segements
+%% matches path segments and returns variables
 -spec path(uri:path(), request()) -> datum:either( uri:segments() ).
 
 path(Path, #request{uri = Uri}) ->
    path(
       uri:segments(uri:path(Path, Uri)), 
       uri:segments(Uri), 
-      Uri
+      [{<<"path">>, uri:path(Uri)}]
    ).
 
-path([<<"_">>|A], [_|B], Uri) ->
-   path(A, B, Uri);
+path([<<$_>>|A], [_|B], Env) ->
+   path(A, B, Env);
 
-path([<<"*">>|_], _, Uri) ->
-   {ok, uri:segments(Uri)};
+path([<<$:, Var/binary>>|A], [Val|B], Env) ->
+   path(A, B, [{Var, Val} | Env]);
 
-path([Head|A], [Head|B], Uri) ->
-   path(A, B, Uri);
+path([<<"*">>|_], _, Env) ->
+   {ok, Env};
 
-path([], [], Uri) ->
-   {ok, uri:segments(Uri)};
+path([Head|A], [Head|B], Env) ->
+   path(A, B, Env);
 
-path(_, _, Uri) ->
-   {error, {not_available, uri:s(Uri)}}.
+path([], [], Env) ->
+   {ok, Env};
+
+path(_, _, Env) ->
+   {error, {not_available, lens:get(lens:pair(<<"path">>), Env)}}.
    
 %%
 %% matches path segments and return url

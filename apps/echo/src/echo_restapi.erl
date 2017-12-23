@@ -4,31 +4,39 @@
 -module(echo_restapi).
 -compile({parse_transform, category}).
 
--export([
-   ipaddr_json/0,
-   ipaddr_text/0,
-   user_agent/0,
-   headers/0,
-   get/0,
-   post/0,
-   post_json/0,
-   put/0,
-   patch/0,
-   delete/0,
-   utf8/0,
-   deflate/0,
-   gzip/0,
-   compress/0,
-   status_code/0,
-   response_header/0,
-   redirect_n/0,
-   cookies/0,
-   cookies_set/0,
-   cookies_del/0,
-   accesslog/0,
-   stream/0,
-   websocket/0
-]).
+-export([endpoints/0]).
+
+%%
+%%
+endpoints() ->
+   [
+      ipaddr_json(),
+      ipaddr_text(),
+      user_agent(),
+      headers(),
+      http_get(),
+      http_post(),
+      http_post_json(),
+      http_put(),
+      http_patch(),
+      http_delete(),
+      utf8(),
+      deflate(),
+      gzip(),
+      compress(),
+      status_code(),
+      response_header(),
+      redirect_n(),
+      cookies(),
+      cookies_set(),
+      cookies_del(),
+      accesslog(),
+      stream(),
+      websocket(),
+
+      restd_static:reader("/*", echo)
+   ].
+
 
 %%
 %% Returns Origin IP.
@@ -77,7 +85,7 @@ headers() ->
 %%
 %% Returns GET data.
 %%
-get() ->
+http_get() ->
    [reader ||
       Url  /= restd:url("/get"),
       Mthd /= restd:method('GET'),
@@ -89,7 +97,7 @@ get() ->
 %%
 %% Returns POST data.
 %% 
-post() ->
+http_post() ->
    [reader ||
       Url  /= restd:url("/post"),
       Mthd /= restd:method('POST'),
@@ -103,7 +111,7 @@ post() ->
 %%
 %% Return POST JSON only
 %%
-post_json() ->
+http_post_json() ->
    [reader ||
       Url  /= restd:url("/post/json"),
       Mthd /= restd:method('POST'),
@@ -117,7 +125,7 @@ post_json() ->
 %%
 %% Returns PUT data.
 %% 
-put() ->
+http_put() ->
    [reader ||
       Url  /= restd:url("/put"),
       Mthd /= restd:method('PUT'),
@@ -131,7 +139,7 @@ put() ->
 %%
 %% Returns PATCH data.
 %% 
-patch() ->
+http_patch() ->
    [reader ||
       Url  /= restd:url("/patch"),
       Mthd /= restd:method('PATCH'),
@@ -146,7 +154,7 @@ patch() ->
 %%
 %% Returns DELETE data.
 %% 
-delete() ->
+http_delete() ->
    [reader ||
       Url  /= restd:url("/delete"),
       Mthd /= restd:method('DELETE'),
@@ -221,13 +229,11 @@ compress() ->
 %%
 status_code() ->
    [reader ||
-      Path /= restd:path("/status/_"),
+      Path /= restd:path("/status/:code"),
+      Code <- cats:unit( lens:get(lens:pair(<<"code">>), Path) ),
          _ /= restd:method('GET'),
-      Code <- do_status_code(Path),
-        _  /= restd:to_text(scalar:i(Code), [], ["-=[ ", Code, " ]=-"])
+         _ /= restd:to_text(scalar:i(Code), [], ["-=[ ", Code, " ]=-"])
    ].
-
-do_status_code([_, Code]) -> {ok, Code}.
 
 %%
 %% Return given response headers
@@ -245,16 +251,18 @@ response_header() ->
 %%
 redirect_n() ->
    [reader ||
-      Path /= restd:path("/redirect/_"),
+      Path /= restd:path("/redirect/:nth"),
+      Nth  <- cats:unit( lens:get(lens:pair(<<"nth">>), Path) ),
+
          _ /= restd:method('GET'),
-       Uri <- redirect(Path),
+       Uri <- redirect(Nth),
          _ /= restd:to_text(redirect, [{<<"Location">>, Uri}], <<$ >>)
    ].
 
-redirect([_, <<"1">>]) ->
+redirect(<<"1">>) ->
    {ok, <<"/get">>};
 
-redirect([_, N]) ->
+redirect(N) ->
    {ok, <<"/redirect/", (scalar:s(scalar:i(N) - 1))/binary>>}.
 
 %%
@@ -317,12 +325,13 @@ accesslog() ->
 %%
 stream() ->
    [reader ||
-      Path /= restd:path("/stream/_"),
+      Path /= restd:path("/stream/:n"),
+      N    <- cats:unit( lens:get(lens:pair(<<"n">>), Path) ),
          _ /= restd:method('GET'),
-      cats:unit({200, [], stream_data(Path)})
+      cats:unit({200, [], stream_data(N)})
    ].
 
-stream_data([_, N]) ->
+stream_data(N) ->
    stream:take(scalar:i(N),
       stream:cycle([
          <<"<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</p>\n">>
