@@ -113,7 +113,7 @@ path(Path, #request{uri = Uri}) ->
    path(
       uri:segments(uri:path(Path, Uri)), 
       uri:segments(Uri), 
-      [{<<"path">>, uri:path(Uri)}]
+      [{<<"path">>, uri:path(Uri)} | uri:q(Uri)]
    ).
 
 path([<<$_>>|A], [_|B], Env) ->

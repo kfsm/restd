@@ -32,6 +32,7 @@ endpoints() ->
       cookies_del(),
       accesslog(),
       stream(),
+      url_query(),
       websocket(),
 
       restd_static:reader("/*", echo)
@@ -337,6 +338,17 @@ stream_data(N) ->
          <<"<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</p>\n">>
       ])
    ). 
+
+%%
+%% Decodes query variables
+%%
+url_query() ->
+   [reader ||
+      Path /= restd:path("/q"),
+         _ /= cats:optionT(badarg, lens:get(lens:pair(<<"id">>, undefined), Path)),
+         _ /= restd:method('GET'),
+         _ /= restd:to_json({ok, Path})
+   ].
 
 %%
 %% echo websocket
