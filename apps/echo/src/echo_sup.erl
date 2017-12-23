@@ -23,36 +23,15 @@ init([]) ->
       {
          {one_for_one, 4, 1800},
          [
-            restd:spec(endpoints(), [{port, "http://*:8888"}, {backlog, 1024}])
+            restapi()
          ]
       }
    }.
 
-endpoints() ->
-   [
-      echo_restapi:ipaddr_json(),
-      echo_restapi:ipaddr_text(),
-      echo_restapi:user_agent(),
-      echo_restapi:headers(),
-      echo_restapi:get(),
-      echo_restapi:post(),
-      echo_restapi:post_json(),
-      echo_restapi:put(),
-      echo_restapi:patch(),
-      echo_restapi:delete(),
-      echo_restapi:utf8(),
-      echo_restapi:deflate(),
-      echo_restapi:gzip(),
-      echo_restapi:compress(),
-      echo_restapi:status_code(),
-      echo_restapi:response_header(),
-      echo_restapi:redirect_n(),
-      echo_restapi:cookies(),
-      echo_restapi:cookies_set(),
-      echo_restapi:cookies_del(),
-      echo_restapi:accesslog(),
-      echo_restapi:stream(),
-      echo_restapi:websocket(),
-
-      restd_static:reader("/*", echo)
-   ].
+%%
+%%
+restapi() ->
+   restd:spec(
+      echo_restapi:endpoints(), 
+      [{port, "http://*:8888"}, {backlog, 1024}]
+   ).

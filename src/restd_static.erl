@@ -35,9 +35,9 @@ reader(Pattern, Root) ->
    
 reader(Pattern, SubPath, Root) ->
    [reader ||
-      Path /= restd:path(Pattern),
+      Uri  /= restd:url(Pattern),
          _ /= restd:method('GET'),
-      File <- filename(Root, segments(subpath(SubPath), Path)),
+      File <- filename(Root, segments(subpath(SubPath), uri:segments(Uri))),
       readfile(File),
       sendfile(File, _)
    ].
