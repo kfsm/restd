@@ -34,6 +34,7 @@
    method/2,
    headers/1,
    header/2,
+   host/1,
    provided_content/2,
    provided_encoding/1,
    provided_encoding/2,
@@ -205,6 +206,31 @@ header(Head, #request{head = Headers}) ->
          {error, {badarg, Head}};
       Value ->
          {ok, Value}
+   end.
+
+%%
+%% matches request host header(s)
+-spec host(request()) -> datum:either( uri:uri() ).
+
+host(#request{head = Headers} = Request) ->
+   [either ||
+      Host <- header('Host', Request),
+      host_schema(Headers),
+      cats:unit(uri:authority(Host, uri:new(_)))
+   ].
+
+host_schema(Headers) ->
+   case 
+      {
+         lens:get(lens:pair(<<"X-Forwarded-Proto">>, undefined), Headers),
+         lens:get(lens:pair(<<"X-Forwarded-Port">>, undefined), Headers),
+         lens:get(lens:pair(<<"X-Knet-Peer">>, undefined), Headers)
+      } 
+   of
+      {<<"https">>, _, _} -> {ok, https};
+      {_, <<"443">>, _} -> {ok, https};
+      {_, _, <<"ssl://", _/binary>>} -> {ok, https};
+      _ -> {ok, http}
    end.
 
 %%

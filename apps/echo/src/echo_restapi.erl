@@ -33,6 +33,7 @@ endpoints() ->
       accesslog(),
       stream(),
       url_query(),
+      absolute_url(),
       websocket(),
 
       restd_static:reader("/*", echo)
@@ -348,6 +349,18 @@ url_query() ->
          _ /= cats:optionT(badarg, lens:get(lens:pair(<<"id">>, undefined), Path)),
          _ /= restd:method('GET'),
          _ /= restd:to_json({ok, Path})
+   ].
+
+%%
+%% Build absolute url
+%%
+absolute_url() ->
+   [reader ||
+      _ /= restd:path("/host"),
+      _ /= restd:method('GET'),
+
+      Root /= restd:host(),
+      _ /= restd:to_json({ok, uri:s(uri:path(<<"/ip">>, Root))})
    ].
 
 %%
