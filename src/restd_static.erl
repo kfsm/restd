@@ -23,7 +23,8 @@
 -export([
    reader/2,
    reader/3,
-   react/3
+   react/3,
+   react_env_js/2
 ]).
 
 
@@ -49,6 +50,14 @@ react(Path, Root, ReactApp) ->
    StaticRoot = filename:join([code:priv_dir(Root), ReactApp, build]),
    restd_static:reader(Pattern, Path, StaticRoot).
 
+%%
+%% host react dynamic application config
+react_env_js(Path, Config) ->
+   [reader ||
+      _ /= restd:path(filename:join([Path, "env.js"])),
+      _ /= restd:method('GET'),
+      sendfile("env.js", <<"window.env = ", (jsx:encode(Config))/binary>>)
+   ].
 
 
 %%
