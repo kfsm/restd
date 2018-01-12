@@ -7,26 +7,17 @@
   {git,"https://github.com/fogfish/feta",
        {ref,"13a4e7d7b1aa7d857ecc218077afac785346aff9"}},
   1},
- {<<"goldrush">>,
-  {git,"https://github.com/basho/goldrush.git",
-       {ref,"8f1b715d36b650ec1e1f5612c00e28af6ab0de82"}},
-  1},
+ {<<"goldrush">>,{pkg,<<"goldrush">>,<<"0.1.9">>},1},
  {<<"htstream">>,
   {git,"https://github.com/kfsm/htstream",
        {ref,"a6f07398ea15775a16b77e584d799e8baab76843"}},
   1},
- {<<"jsx">>,
-  {git,"https://github.com/talentdeficit/jsx",
-       {ref,"45ffea21a6863c58fb7da1f937e868916ff68b27"}},
-  0},
+ {<<"jsx">>,{pkg,<<"jsx">>,<<"2.9.0">>},0},
  {<<"knet">>,
   {git,"https://github.com/kfsm/knet.git",
        {ref,"76e9afff1a280667035c18c996cef34be40e7ed6"}},
   0},
- {<<"lager">>,
-  {git,"https://github.com/basho/lager",
-       {ref,"81eaef0ce98fdbf64ab95665e3bc2ec4b24c7dac"}},
-  0},
+ {<<"lager">>,{pkg,<<"lager">>,<<"3.5.2">>},0},
  {<<"meck">>,{pkg,<<"meck">>,<<"0.8.8">>},1},
  {<<"pipe">>,
   {git,"https://github.com/kfsm/pipe",
@@ -38,5 +29,8 @@
   1}]}.
 [
 {pkg_hash,[
+ {<<"goldrush">>, <<"F06E5D5F1277DA5C413E84D5A2924174182FB108DABB39D5EC548B27424CD106">>},
+ {<<"jsx">>, <<"D2F6E5F069C00266CAD52FB15D87C428579EA4D7D73A33669E12679E203329DD">>},
+ {<<"lager">>, <<"614A8C8F67BF99B69EB264EA22121AD25511C055AAEC09B086773D5108C6767F">>},
  {<<"meck">>, <<"EEB3EFE811D4346E1A7F65B2738ABC2AD73CBE1A2C91B5DD909BAC2EA0414FA6">>}]}
 ].
