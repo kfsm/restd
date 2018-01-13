@@ -43,26 +43,6 @@
   ,entity    = undefined :: datum:q()      %% incoming entitity queue
 }).
 
-%% http connection is established
-% -record(http, {
-%    route  = undefined :: atom()          %% routing table
-%   ,mthd   = undefined :: _
-%   ,uri    = undefined :: uri:uri()
-%   ,head   = undefined :: _
-%   ,env    = undefined :: _
-%   ,q      = undefined :: datum:q()       %% current queue
-% }).
-
-%% http request is mapped to resource 
-% -record(rest, {
-%    mod    = undefined :: atom()          %% resource implementation
-%   ,export = undefined :: _               %% resource exports
-%   ,mthd   = undefined :: _
-%   ,uri    = undefined :: uri:uri()
-%   ,inhead = undefined :: _               %% ingress http headers
-%   ,eghead = undefined :: _               %% egress http headers
-%   ,env    = undefined :: _
-% }).
 
 %%%------------------------------------------------------------------
 %%%
@@ -132,15 +112,15 @@ free(_Reason, _State) ->
 
 'HTTP'({http, _Uri, eof}, Pipe, #state{endpoints = Endpoints} = State) ->
    case execute_rest(State) of
-      ?EITHER_R({s, _, _} = Http) ->
+      ?EitherR(#stream{} = Http) ->
          stream:foreach(pipe:a(Pipe, _), Http),
          {next_state, 'ACCEPT', #state{endpoints = Endpoints}};
 
-      ?EITHER_R(Http) ->
+      ?EitherR(Http) ->
          lists:foreach(pipe:a(Pipe, _), Http),
          {next_state, 'ACCEPT', #state{endpoints = Endpoints}};
 
-      ?EITHER_L(Reason) ->
+      ?EitherL(Reason) ->
          {stop, Reason, State}
    end;
 
@@ -165,15 +145,15 @@ free(_Reason, _State) ->
 
 'WEBSOCK'({ws, _, Packet}, Pipe, #state{} = State) ->
    case execute_stream(State#state{entity = Packet}) of
-      ?EITHER_R({s, _, _} = Http) ->
+      ?EitherR(#stream{} = Http) ->
          stream:foreach(pipe:a(Pipe, _), Http),
          {next_state, 'WEBSOCK', State};
 
-      ?EITHER_R(Http) ->
+      ?EitherR(Http) ->
          lists:foreach(pipe:a(Pipe, _), Http),
          {next_state, 'WEBSOCK', State};
 
-      ?EITHER_L(Reason) ->
+      ?EitherL(Reason) ->
          {stop, Reason, State}
    end.
 
@@ -222,9 +202,9 @@ execute_rest(#state{endpoints = Endpoints, request = Request, entity = Entity}) 
    case 
       endpoints(Endpoints, [], Request#request{entity = HttpEntity})
    of
-      ?EITHER_R(Http) ->
+      ?EitherR(Http) ->
          packetize(Http);
-      ?EITHER_L(Reasons) ->
+      ?EitherL(Reasons) ->
          packetize(fail(Request, Reasons))
    end.
 
@@ -234,9 +214,9 @@ execute_stream(#state{endpoints = Endpoints, request = Request, entity = Entity}
    case 
       endpoints(Endpoints, [], Request#request{entity = Entity})
    of
-      ?EITHER_R(Http) ->
+      ?EitherR(Http) ->
          streaming(Http);
-      ?EITHER_L(Reasons) ->
+      ?EitherL(Reasons) ->
          % web-socket is already established, 
          % we cannot use HTTP status code to indicate routing error
          % Routing is failed send only error and terminate connection
@@ -248,9 +228,9 @@ execute_stream(#state{endpoints = Endpoints, request = Request, entity = Entity}
 %%
 endpoints([Head | Tail], Reasons, #request{} = Request) ->
    case Head(Request) of
-      ?EITHER_R(_) = Result ->
+      ?EitherR(_) = Result ->
          Result;
-      ?EITHER_L(Reason) ->
+      ?EitherL(Reason) ->
          endpoints(Tail, [Reason | Reasons], Request)
    end;
 
@@ -284,7 +264,7 @@ fail_priority(_) -> 1.
 
 %%
 %%
-packetize({Code, Head, {s, _, _} = Stream}) ->
+packetize({Code, Head, #stream{} = Stream}) ->
    {HtCode, HtText} = restd_codec:status_code(Code),
    HtHead = [{<<"Transfer-Encoding">>, <<"chunked">>} | Head],
    {ok,
@@ -321,7 +301,7 @@ encode(Head, Entity) ->
 
 %%
 %%
-streaming({s, _, _} = Stream) ->
+streaming(#stream{} = Stream) ->
    {ok, stream:map(fun(X) -> {packet, X} end, Stream)};
 
 streaming(Entity) ->
