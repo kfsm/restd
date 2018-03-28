@@ -108,7 +108,13 @@ readfile(File) ->
 sendfile(File, Content) ->
    Type = content_type(filename:extension(File)),
    {ok,
-      {200, [{<<"Content-Type">>, Type}], Content}
+      {200, 
+         [
+            {<<"Content-Type">>, Type}, 
+            {<<"Transfer-Encoding">>, <<"chunked">>}
+         ], 
+         Content
+      }
    }.
 
 %%
