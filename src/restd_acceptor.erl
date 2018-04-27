@@ -143,6 +143,10 @@ free(_Reason, _State) ->
 'WEBSOCK'({ws, _, {error, Reason}}, _Pipe, State) ->
    {stop, Reason, State};
 
+'WEBSOCK'({_, _, passive}, Pipe, State) ->
+   pipe:a(Pipe, {active, 1024}),
+   {next_state, 'WEBSOCK', State};
+
 'WEBSOCK'({ws, _, Packet}, Pipe, #state{} = State) ->
    case execute_stream(State#state{entity = Packet}) of
       ?EitherR(#stream{} = Http) ->
