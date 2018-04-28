@@ -153,6 +153,9 @@ free(_Reason, _State) ->
          stream:foreach(pipe:a(Pipe, _), Http),
          {next_state, 'WEBSOCK', State};
 
+      ?EitherR(?None) ->
+         {next_state, 'WEBSOCK', State};
+               
       ?EitherR(Http) ->
          lists:foreach(pipe:a(Pipe, _), Http),
          {next_state, 'WEBSOCK', State};
