@@ -308,6 +308,9 @@ encode(Head, Entity) ->
 
 %%
 %%
+streaming(?None) ->
+   {ok, ?None};
+
 streaming(#stream{} = Stream) ->
    {ok, stream:map(fun(X) -> {packet, X} end, Stream)};
 
