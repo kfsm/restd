@@ -22,8 +22,10 @@
 
 -export([start/0]).
 -export([
-   start_link/2, 
-   spec/2
+   start_link/2,
+   start_link/3,
+   spec/2,
+   spec/3
 ]).
 %% directives
 -export([
@@ -43,9 +45,6 @@
    % accepted_charset/2,
    % accepted_encoding/2,
    authorize/2,
-   cors/1, 
-   cors/2,
-   cors/3,
    accesslog/2,
    to_json/2, to_json/3, to_json/4,
    as_json/1,
@@ -53,6 +52,14 @@
    as_text/1,
    to_form/2, to_form/3, to_form/4,
    as_form/1
+]).
+%% filters
+-export([
+   cors/0, 
+   cors/1,
+   cors/2,
+   preflight/0,
+   accesslog/0
 ]).
 
 
@@ -62,6 +69,7 @@
 %% data types
 %%
 -type endpoint()  :: fun((request()) -> {ok, response()} | {error, _}).
+-type filter()    :: fun((request()) -> {ok, headers()} | {error, _}).
 
 -type request()   :: #request{}.
 -type response()  :: {code(), headers(), entity()}.
@@ -84,13 +92,18 @@ start() ->
 %%
 %% start rest service
 -spec start_link([endpoint()], opts()) -> {ok, pid()} | {error, _}.
+-spec start_link([endpoint()], [filter()], opts()) -> {ok, pid()} | {error, _}.
 
 start_link(Routes, Opts) ->
-   restd_service_sup:start_link(Routes, Opts).
+   restd_service_sup:start_link(Routes, undefined, Opts).
+
+start_link(Routes, Filters, Opts) ->
+   restd_service_sup:start_link(Routes, Filters, Opts).
 
 %%
 %% return a supervisor specification of services
 -spec spec(_, _) -> _.
+-spec spec(_, _, _) -> _.
 
 spec(Routes, Opts) ->
    {
@@ -99,10 +112,17 @@ spec(Routes, Opts) ->
       permanent, 5000, supervisor, dynamic
    }.
 
+spec(Routes, Filters, Opts) ->
+   {
+      scalar:s(opts:val(port, Opts)),
+      {restd, start_link, [Routes, Filters, Opts]},
+      permanent, 5000, supervisor, dynamic
+   }.
+
 
 %%%----------------------------------------------------------------------------   
 %%%
-%%% pattern match interface
+%%% directives
 %%%
 %%%----------------------------------------------------------------------------   
 
@@ -325,38 +345,6 @@ authorize(Authorize, #request{mthd = Mthd, uri = Uri, head = Head}) ->
    end.
 
 %%
-%% match request and returns CORS headers
--spec cors(request()) -> datum:either( headers() ).
--spec cors(headers(), request()) -> datum:either( headers() ).
--spec cors(_, headers(), request()) -> datum:either( headers() ).
-
-cors(Request) ->
-   cors(default_cors(), Request).
-
-cors(Policy, #request{head = Head}) ->
-   case lens:get(lens:pair(<<"Origin">>, undefined), Head) of
-      undefined ->
-         {ok, []};
-      Origin ->
-         {ok, [{<<"Access-Control-Allow-Origin">>, Origin} | Policy]}
-   end.
-
-cors(Origin, Policy, #request{head = Head}) ->
-   case lens:get(lens:pair(<<"Origin">>, undefined), Head) of
-      {_, Origin} ->
-         {ok, [{<<"Access-Control-Allow-Origin">>, Origin} | Policy]};
-      Other ->
-         {error, {not_allowed, scalar:s(Other)}}
-   end.
-
-default_cors() ->
-   [
-      {<<"Access-Control-Allow-Methods">>, <<"GET, PUT, POST, DELETE, OPTIONS">>}
-     ,{<<"Access-Control-Allow-Headers">>, <<"Content-Type">>}
-     ,{<<"Access-Control-Max-Age">>,       600}
-   ].
-
-%%
 %%
 %% output access evidence using common access log format:
 %%
@@ -490,6 +478,64 @@ to_form(Code, Head, Form, _Request) ->
 as_form(#request{entity = Entity}) ->
    restd_codec:decode_form(Entity).
 
+%%%----------------------------------------------------------------------------   
+%%%
+%%% filters
+%%%
+%%%----------------------------------------------------------------------------   
+
+%%
+%% CORS filters
+-spec cors() -> fun( (request()) -> datum:either(headers())).
+-spec cors(headers()) -> fun( (request()) -> datum:either(headers())).
+-spec cors(_, headers()) -> fun( (request()) -> datum:either(headers())).
+
+cors() ->
+   cors(default_cors()).
+
+cors(Policy) ->
+   fun(#request{head = Head}) ->
+      case lens:get(lens:pair(<<"Origin">>, undefined), Head) of
+         undefined ->
+            {ok, []};
+         Origin ->
+            {ok, [{<<"Access-Control-Allow-Origin">>, Origin} | Policy]}
+      end
+   end.
+
+cors(Origin, Policy) ->
+   fun(#request{head = Head}) ->
+      case lens:get(lens:pair(<<"Origin">>, undefined), Head) of
+         {_, Origin} ->
+            {ok, [{<<"Access-Control-Allow-Origin">>, Origin} | Policy]};
+         Other ->
+            {error, {not_allowed, scalar:s(Other)}}
+      end
+   end.
+
+default_cors() ->
+   [
+      {<<"Access-Control-Allow-Methods">>, <<"GET, PUT, POST, DELETE, OPTIONS">>}
+     ,{<<"Access-Control-Allow-Headers">>, <<"Content-Type, Authorization, Accept">>}
+     ,{<<"Access-Control-Max-Age">>,       600}
+   ].
+
+preflight() ->
+   [reader ||
+         _ /= restd:method('OPTIONS'),
+         _ /= restd:to_text({ok, <<" ">>})
+   ].   
+
+%%
+%%
+accesslog() ->
+   fun(#request{t = T, mthd = Mthd, uri = Uri, head = Head}) ->
+      Peer = lens:get(lens:pair(<<"X-Knet-Peer">>, $-), Head),
+      UA   = lens:get(lens:pair(<<"User-Agent">>, $-), Head),
+      Log  = erlang:iolist_to_binary([Peer, $ , $-, $ , $", scalar:s(Mthd), $ , uri:s(Uri), $", $ , $-, $ , $", UA, $", $ , $-, $ , scalar:s(tempus:u(tempus:diff(T)))]),
+      lager:notice(Log),
+      {ok, []}
+   end.
 
 %%%----------------------------------------------------------------------------   
 %%%
