@@ -4,12 +4,20 @@
 -module(echo_restapi).
 -compile({parse_transform, category}).
 
--export([endpoints/0]).
+-export([filters/0, endpoints/0]).
+
+%%
+%%
+filters() ->
+   [
+      restd:cors()
+   ].
 
 %%
 %%
 endpoints() ->
    [
+      restd:preflight(),
       ipaddr_json(),
       ipaddr_text(),
       user_agent(),

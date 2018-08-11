@@ -26,7 +26,7 @@
 -include_lib("datum/include/datum.hrl").
 
 -export([
-   start_link/3,
+   start_link/4,
    init/1,
    free/2,
    'LISTEN'/3,
@@ -38,9 +38,10 @@
  
 %% resource idle 
 -record(state, {
-   endpoints = undefined :: atom()         %% routing table
-  ,request   = undefined :: #request{}     %%
-  ,entity    = undefined :: datum:q()      %% incoming entitity queue
+   endpoints = undefined :: _,             %% request routing table
+   filters   = undefined :: _,             %% request filters
+   request   = undefined :: #request{},    %%
+   entity    = undefined :: datum:q()      %% incoming entity queue
 }).
 
 
@@ -50,12 +51,17 @@
 %%%
 %%%------------------------------------------------------------------   
 
-start_link(Endpoints, Uri, Opts) ->
-   pipe:start_link(?MODULE, [Endpoints, Uri, Opts], []).
+start_link(Endpoints, Filters, Uri, Opts) ->
+   pipe:start_link(?MODULE, [Endpoints, Filters, Uri, Opts], []).
 
-init([Endpoints, Uri, Opts]) ->
+init([Endpoints, Filters, Uri, Opts]) ->
    knet:bind(Uri, Opts),
-   {ok, 'ACCEPT', #state{endpoints = Endpoints}}.
+   {ok, 'ACCEPT', 
+      #state{
+         endpoints = Endpoints,
+         filters   = Filters
+      }
+   }.
 
 free(_Reason, _State) ->
    ok.
@@ -110,15 +116,15 @@ free(_Reason, _State) ->
    pipe:a(Pipe, {active, 1024}),
    {next_state, 'HTTP', State};
 
-'HTTP'({http, _Uri, eof}, Pipe, #state{endpoints = Endpoints} = State) ->
+'HTTP'({http, _Uri, eof}, Pipe, #state{endpoints = Endpoints, filters = Filters} = State) ->
    case execute_rest(State) of
       ?EitherR(#stream{} = Http) ->
          stream:foreach(pipe:a(Pipe, _), Http),
-         {next_state, 'ACCEPT', #state{endpoints = Endpoints}};
+         {next_state, 'ACCEPT', #state{endpoints = Endpoints, filters = Filters}};
 
       ?EitherR(Http) ->
          lists:foreach(pipe:a(Pipe, _), Http),
-         {next_state, 'ACCEPT', #state{endpoints = Endpoints}};
+         {next_state, 'ACCEPT', #state{endpoints = Endpoints, filters = Filters}};
 
       ?EitherL(Reason) ->
          {stop, Reason, State}
@@ -203,14 +209,29 @@ free(_Reason, _State) ->
 
 %%
 %%
-execute_rest(#state{endpoints = Endpoints, request = Request, entity = Entity}) ->
-   HttpEntity = deq:list(Entity),
+execute_rest(#state{endpoints = Endpoints, filters = undefined, request = Request, entity = Entity}) ->
+   HttpEntity  = deq:list(Entity),
+   HttpRequest = Request#request{entity = HttpEntity},
    ?DEBUG("~p~n~p~n", [Request, HttpEntity]),
-   case 
-      endpoints(Endpoints, [], Request#request{entity = HttpEntity})
-   of
+   case endpoints(Endpoints, HttpRequest) of
       ?EitherR(Http) ->
          packetize(Http);
+      ?EitherL(Reasons) ->
+         packetize(fail(Request, Reasons))
+   end;
+
+execute_rest(#state{endpoints = Endpoints, filters = Filters, request = Request, entity = Entity}) ->
+   HttpEntity  = deq:list(Entity),
+   HttpRequest = Request#request{entity = HttpEntity},
+   ?DEBUG("~p~n~p~n", [Request, HttpEntity]),
+   case filters(Filters, HttpRequest) of
+      ?EitherR(HttpHeader) ->
+         case endpoints(Endpoints, HttpRequest) of
+            ?EitherR({Code, Head, Body}) ->
+               packetize({Code, Head ++ HttpHeader, Body});
+            ?EitherL(Reasons) ->
+               packetize(fail(Request, Reasons))
+         end;
       ?EitherL(Reasons) ->
          packetize(fail(Request, Reasons))
    end.
@@ -219,7 +240,7 @@ execute_rest(#state{endpoints = Endpoints, request = Request, entity = Entity}) 
 %%
 execute_stream(#state{endpoints = Endpoints, request = Request, entity = Entity}) ->
    case 
-      endpoints(Endpoints, [], Request#request{entity = Entity})
+      endpoints(Endpoints, Request#request{entity = Entity})
    of
       ?EitherR(Http) ->
          streaming(Http);
@@ -233,6 +254,9 @@ execute_stream(#state{endpoints = Endpoints, request = Request, entity = Entity}
 
 %%
 %%
+endpoints(Chain, Request) ->
+   endpoints(Chain, [], Request).
+
 endpoints([Head | Tail], Reasons, #request{} = Request) ->
    case Head(Request) of
       ?EitherR(_) = Result ->
@@ -243,6 +267,25 @@ endpoints([Head | Tail], Reasons, #request{} = Request) ->
 
 endpoints([], Reasons, #request{}) ->
    {error, Reasons}.
+
+%%
+%%
+filters(Chain, Request) ->
+   filters(Chain, [], [], Request).
+
+filters([Head | Tail], Oks, Reasons, #request{} = Request) ->
+   case Head(Request) of
+      ?EitherR(Ok) ->
+         filters(Tail, Oks ++ Ok, Reasons, Request);
+      ?EitherL(Reason) ->
+         filters(Tail, Oks, [Reason | Reasons], Request)
+   end;
+
+filters([], _, [_|_] = Reasons, #request{}) ->
+   {error, Reasons};
+
+filters([], Ok, [], #request{}) ->
+   {ok, Ok}.
 
 
 %%

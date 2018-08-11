@@ -11,7 +11,20 @@ The modern functional rest frameworks uses pure functions to define a request ro
 
 tbd.
 
+### directives
+
+tbd
+
+### filters
+
+* cors
+* accesslog
+* compress 
+
+
 ## Changelog
 
+* 1.7.x - support for request filters
+* 1.6.x - stable combinator interface 
 * 1.4.0 - define a functional combinators for HTTP services
-* 1.3.4 - initial release canditate
+* 1.3.4 - initial release candidate

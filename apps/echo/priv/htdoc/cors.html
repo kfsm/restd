@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<meta charset="utf-8" />
+<title>CORS</title>
+
+<script language="javascript" type="text/javascript">
+
+const host = "http://localhost:8888"
+
+//
+//
+const jsonify = (http) => {
+   if (http.ok && http.status !== 202) { return http.json() }
+   if (http.ok && http.status === 202) { return undefined }
+   throw Object.assign(new Error(`${http.status}\n${http.url}`),
+      { type: `https://httpstatuses.com/${http.status}`, status: http.status })
+}
+
+const print = (json) => {
+   const pre = document.createElement("pre")
+   pre.style.wordWrap = "break-word"
+   pre.innerHTML = JSON.stringify(json, null, 2)
+   document.getElementById("output").appendChild(pre)
+   console.log(json)
+}  
+
+//
+// cors.html is loaded from other domain (e.g. file://) then echo api
+
+//
+// browser CORS policy blocks the request with error
+//    Origin null is not allowed by Access-Control-Allow-Origin
+// 
+// it is required that HTTP response contains
+//    Access-Control-Allow-Origin: ...
+//
+// Use restd:cors/0 filter to configure CORS policies
+fetch(`${host}/get`, {
+   method: 'GET'
+}).then(jsonify).then(print).catch(x => print(x.message))
+
+//
+// A simple POST behaves similarly to GET, it is not blocked by browser
+// if CORS policy is configured.
+fetch(`${host}/post`, {
+   method: 'POST',
+   body: JSON.stringify({"request": "simple"})
+}).then(jsonify).then(print).catch(x => print(x.message))
+
+
+//
+// If your browser tries to make a "non simple" request:
+//  - an request that includes cookies, 
+//  - Content-Type is other than 
+//       application/x-www-form-urlencoded, 
+//       multipart/form-data
+//       text-plain
+//
+// The preflight is mechanism is involved, use restd:preflight/0 endpoint along with cors policy
+fetch(`${host}/post`, {
+   method: 'POST',
+   headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer token'
+   },
+   body: JSON.stringify({"request": "non simple"})
+}).then(jsonify).then(print).catch(x => print(x.message))
+
+
+//
+// Browser block the response for non allowed headers
+fetch(`${host}/get`, {
+   method: 'GET',
+   headers: {
+      'X-Authorization': 'Bearer token'
+   }
+}).then(jsonify).then(print).catch(x => print(x.message))
+</script>  
+
+<h2>CORS Test</h2>
+<div id="output">
+   
+</div>  
