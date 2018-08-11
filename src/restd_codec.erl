@@ -30,9 +30,12 @@ encode_error(Uri, Reason) ->
    },
    {Code, [{<<"Content-Type">>, <<"application/json">>}], jsx:encode(Json)}.
 
-
+encode_error_details({_, #{} = Details}) ->
+   Details;
 encode_error_details({Reason, Details}) ->
    scalar:s([scalar:s(Reason), $:, $ , scalar:s(Details)]);
+encode_error_details(#{} = Reason) ->
+   Reason;
 encode_error_details(Reason) ->
    scalar:s(Reason).
 
