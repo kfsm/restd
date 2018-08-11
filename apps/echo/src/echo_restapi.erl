@@ -10,7 +10,7 @@
 %%
 filters() ->
    [
-      restd:cors() 
+      restd:cors()
    ].
 
 %%

@@ -59,7 +59,9 @@
    cors/1,
    cors/2,
    preflight/0,
-   accesslog/0
+   accesslog/0,
+   compress/0,
+   compress/1
 ]).
 
 
@@ -520,6 +522,10 @@ default_cors() ->
      ,{<<"Access-Control-Max-Age">>,       600}
    ].
 
+%%
+%% Build-in end-point to handle CORS pre-flight requests
+-spec preflight() -> _.
+
 preflight() ->
    [reader ||
          _ /= restd:method('OPTIONS'),
@@ -527,7 +533,9 @@ preflight() ->
    ].   
 
 %%
-%%
+%% access log filter
+-spec accesslog() -> fun( (request()) -> datum:either(headers())).
+
 accesslog() ->
    fun(#request{t = T, mthd = Mthd, uri = Uri, head = Head}) ->
       Peer = lens:get(lens:pair(<<"X-Knet-Peer">>, $-), Head),
@@ -536,6 +544,38 @@ accesslog() ->
       lager:notice(Log),
       {ok, []}
    end.
+
+%%
+%% compress filters
+-spec compress() -> fun( (request()) -> datum:either(headers())).
+-spec compress(_) -> fun( (request()) -> datum:either(headers())).
+
+compress() ->
+   fun(#request{} = Request) ->
+      compress_content_with(
+         [either ||
+            Head <- header(<<"Accept-Encoding">>, Request),
+            cats:unit(parse_encoding(Head)),
+            return_provided_encoding(_, Head)
+         ]
+      )
+   end.
+
+compress(Encoding) ->
+   fun(#request{} = Request) ->
+      compress_content_with(
+         [either ||
+            Head <- header(<<"Accept-Encoding">>, Request),
+            cats:unit(parse_encoding(Head)),
+            cats:unit(lists:filter(fun(X) -> X =:= scalar:s(Encoding) end, _)),
+            return_provided_encoding(_, Head)
+         ]
+      )
+   end.
+
+compress_content_with({ok, Encoding}) -> {ok, [Encoding]};
+compress_content_with({error, _}) -> {ok, []}.
+
 
 %%%----------------------------------------------------------------------------   
 %%%
