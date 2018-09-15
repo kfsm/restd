@@ -19,8 +19,8 @@
 -behaviour(supervisor).
 
 -export([
-	start_link/3,
-	init/1
+   start_link/3,
+   init/1
 ]).
 
 %%
@@ -31,8 +31,7 @@
 
 %%
 %%
-start_link(Routes, Filters, Opts) ->
-   Port  = opts:val(port, Opts),
+start_link(Routes, Filters, #{port := Port} = Opts) ->
    supervisor:start_link(?MODULE, [Port, Routes, Filters, Opts]).
    
 init([Port, Routes, Filters, Opts]) -> 
@@ -47,12 +46,14 @@ init([Port, Routes, Filters, Opts]) ->
 %%
 %%
 listen(Uri, Routes, Filters, Opts) ->
-   Sock = opts:val(sock, [], Opts),
-   % @todo knet listen do not obey nopipe option 
-   knet:listen(Uri, [
-      {acceptor, {restd_acceptor, [Routes, Filters]}}
-     ,opts:get(pool,    10, Opts)
-     ,opts:get(backlog, 25, Opts)
-     ,nopipe
-     | Sock
-   ]).
+   knet:listen(Uri, 
+      maps:merge(
+         #{
+            acceptor => {restd_acceptor, [Routes, Filters]}
+         ,  pool     => lens:get(lens:at(pool, 10), Opts)
+         ,  backlog  => lens:get(lens:at(backlog, 25), Opts)
+         ,  pipe     => false
+         },
+         lens:get(lens:at(sock, #{}), Opts)
+      )
+   ).

@@ -34,5 +34,5 @@ restapi() ->
    restd:spec(
       echo_restapi:endpoints(), 
       echo_restapi:filters(),
-      [{port, "http://*:8888"}, {backlog, 1024}]
+      #{port => "http://*:8888", backlog => 1024}
    ).
