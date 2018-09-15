@@ -62,14 +62,14 @@ end_per_group(_, _Config) ->
 %%
 %%
 restapi() ->
-   {ok, Pid} = restd:start_link(default, [
-      {port,    "http://*:8888"},
-      {backlog, 1024},
-      {route, [
+   {ok, Pid} = restd:start_link(default, #{
+      port => "http://*:8888",
+      backlog => 1024,
+      route => [
          {"/test/a",     restd_restapi_test},
          {"/test/auth",  restd_restapi_auth}
-      ]}
-   ]),
+      ]
+   }),
    erlang:unlink(Pid).
 
 

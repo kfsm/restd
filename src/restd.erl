@@ -107,16 +107,16 @@ start_link(Routes, Filters, Opts) ->
 -spec spec(_, _) -> _.
 -spec spec(_, _, _) -> _.
 
-spec(Routes, Opts) ->
+spec(Routes, #{port := Port} = Opts) ->
    {
-      scalar:s(opts:val(port, Opts)),
+      scalar:s(Port),
       {restd, start_link, [Routes, Opts]},
       permanent, 5000, supervisor, dynamic
    }.
 
-spec(Routes, Filters, Opts) ->
+spec(Routes, Filters, #{port := Port} = Opts) ->
    {
-      scalar:s(opts:val(port, Opts)),
+      scalar:s(Port),
       {restd, start_link, [Routes, Filters, Opts]},
       permanent, 5000, supervisor, dynamic
    }.
