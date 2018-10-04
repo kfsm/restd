@@ -52,6 +52,7 @@ listen(Uri, Routes, Filters, Opts) ->
             acceptor => {restd_acceptor, [Routes, Filters]}
          ,  pool     => lens:get(lens:at(pool, 10), Opts)
          ,  backlog  => lens:get(lens:at(backlog, 25), Opts)
+         ,  shutdown => true
          ,  pipe     => false
          },
          lens:get(lens:at(sock, #{}), Opts)
