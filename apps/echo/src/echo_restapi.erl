@@ -39,7 +39,8 @@ endpoints() ->
       cookies_set(),
       cookies_del(),
       accesslog(),
-      stream(),
+      stream_text(),
+      stream_json(),
       url_query(),
       absolute_url(),
       websocket(),
@@ -333,18 +334,28 @@ accesslog() ->
 %%
 %% Stream N chunks
 %%
-stream() ->
+stream_text() ->
    [reader ||
-      Path /= restd:path("/stream/:n"),
+      Path /= restd:path("/stream/text/:n"),
       N    <- cats:unit( lens:get(lens:pair(<<"n">>), Path) ),
          _ /= restd:method('GET'),
-      cats:unit({200, [], stream_data(N)})
+      cats:unit({200, [], stream:map(fun(X) -> <<"<p>", X/binary, "</p>">> end, stream_data(N))})
    ].
+
+stream_json() ->
+   [reader ||
+      Path /= restd:path("/stream/json/:n"),
+      N    <- cats:unit( lens:get(lens:pair(<<"n">>), Path) ),
+         _ /= restd:method('GET'),
+         cats:unit({ok, stream:map(fun(X) -> #{data => X} end, stream_data(N)) }),
+         _ /= restd:to_json(_)
+   ].
+
 
 stream_data(N) ->
    stream:take(scalar:i(N),
       stream:cycle([
-         <<"<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.</p>\n">>
+         <<"Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.">>
       ])
    ). 
 

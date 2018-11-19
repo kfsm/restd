@@ -19,6 +19,7 @@
 -compile({parse_transform, category}).
 
 -include("restd.hrl").
+-include_lib("datum/include/datum.hrl").
 
 -export([start/0]).
 -export([
@@ -404,9 +405,28 @@ to_json(Head, {ok, Json}, Request) ->
 to_json(_, {error, Reason}, #request{uri = Uri}) ->
    {ok, restd_codec:encode_error(Uri, Reason)}.
 
+to_json(Code, Head, #stream{} = Stream, _Request) ->
+   {ok,
+      {
+         Code,
+         [{<<"Content-Type">>, <<"application/json">>} | Head],
+         stream:'++'(
+            stream:'++'(
+               stream:new(<<$[, (jsx:encode(stream:head(Stream)))/binary>>),
+               stream:map(fun(X) -> <<$,, (jsx:encode(X))/binary>> end, stream:tail(Stream))
+            ),
+            stream:new(<<$]>>)
+         )
+      }
+   };
+
 to_json(Code, Head, Json, _Request) ->
    {ok,
-      {Code, [{<<"Content-Type">>, <<"application/json">>} | Head], jsx:encode(Json)}
+      {
+         Code,
+         [{<<"Content-Type">>, <<"application/json">>} | Head],
+         jsx:encode(Json)
+      }
    }. 
 
 
