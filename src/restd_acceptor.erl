@@ -230,10 +230,12 @@ execute_rest(#state{endpoints = Endpoints, filters = Filters, request = Request,
             ?EitherR({Code, Head, Body}) ->
                packetize({Code, Head ++ HttpHeader, Body});
             ?EitherL(Reasons) ->
-               packetize(fail(Request, Reasons))
+               {Code, Head, Body} = fail(Request, Reasons),
+               packetize({Code, Head ++ HttpHeader, Body})
          end;
-      ?EitherL(Reasons) ->
-         packetize(fail(Request, Reasons))
+      ?EitherL({HttpHeader, Reasons}) ->
+         {Code, Head, Body} = fail(Request, Reasons),
+         packetize({Code, Head ++ HttpHeader, Body})
    end.
 
 %%
@@ -273,20 +275,19 @@ endpoints([], Reasons, #request{}) ->
 filters(Chain, Request) ->
    filters(Chain, [], [], Request).
 
-filters([Head | Tail], Oks, Reasons, #request{} = Request) ->
+filters([Head | Tail], Headers, Reasons, #request{} = Request) ->
    case Head(Request) of
-      ?EitherR(Ok) ->
-         filters(Tail, Oks ++ Ok, Reasons, Request);
+      ?EitherR(Header) ->
+         filters(Tail, Headers ++ Header, Reasons, Request);
       ?EitherL(Reason) ->
-         filters(Tail, Oks, [Reason | Reasons], Request)
+         filters(Tail, Headers, [Reason | Reasons], Request)
    end;
 
-filters([], _, [_|_] = Reasons, #request{}) ->
-   {error, Reasons};
+filters([], Headers, [_|_] = Reasons, #request{}) ->
+   {error, {Headers, Reasons}};
 
-filters([], Ok, [], #request{}) ->
-   {ok, Ok}.
-
+filters([], Headers, [], #request{}) ->
+   {ok, Headers}.
 
 %%
 %% https://tools.ietf.org/html/rfc7807
