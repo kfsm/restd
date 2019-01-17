@@ -16,7 +16,7 @@
  {<<"jsx">>,{pkg,<<"jsx">>,<<"2.9.0">>},0},
  {<<"knet">>,
   {git,"https://github.com/kfsm/knet.git",
-       {ref,"492d0fe43dc6f1bfae6718aa9ba5536f0e7bcb29"}},
+       {ref,"6766b1750d262d40a477736074d5bdef74868683"}},
   0},
  {<<"lager">>,{pkg,<<"lager">>,<<"3.6.7">>},0},
  {<<"meck">>,{pkg,<<"meck">>,<<"0.8.12">>},1},
